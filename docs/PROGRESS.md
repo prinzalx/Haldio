@@ -192,3 +192,41 @@ became a time-shifted process.
   in the cache, so "Weiter" continues from the cache (was already true).
 - message vs error_detail: fixed - Job gained `error_detail` (traceback, log/API
   only); the UI message is one short German sentence ("Sprachausgabe fehlgeschlagen.").
+
+## Correction 4 - section 3 Missing content
+
+- Upload card: fixed - drag & drop plus file button, chosen name and size shown,
+  options language (Automatisch/Deutsch/Englisch) and voice (list from
+  `data/voices.json` written by check_qwencpp.py, fallback config speaker — the
+  page never starts tts-server), checkbox "Skript vor der Sprachausgabe prüfen",
+  button disabled during upload. The server reads exactly the four form fields.
+- Job list: fixed - rows show title (from PDF doc_meta), file name, pages, audio
+  length, date, German status badge and progress; buttons "Öffnen",
+  "Herunterladen" (done only), "Löschen"; newest first; friendly empty text.
+- Banner: fixed - "N Jobs warten auf die Sprachausgabe" + "Alle TTS starten" +
+  LLM note; the section 1 guard fires in the backend when the server starts.
+- Job header: fixed - title, file name, upload date, pages.
+- Stepper: fixed - seven stages with icon plus state text (fertig/läuft/
+  fehlgeschlagen/offen), never color alone; a failed job stops at the stage the
+  worker stored in `job.options["stage"]`.
+- Progress and ETA: fixed - bar plus current message; during Sprechen
+  "Einheit X von Y" and an ETA measured from this run's finished units only;
+  no estimate before the second unit, no hard-coded RTF.
+- Summary card: fixed - shows when `02_plan/doc_map.json` exists: summary, main
+  topics, language, estimated length (and warnings when present).
+- Result card: fixed - `<audio controls>` plus downloads MP3/OGG/Skript/
+  QA-Bericht/PDF, only files that exist; download names come from the PDF title
+  (`Mein_Buch.mp3`), not the job id.
+- Actions by state: fixed - Abbrechen while running; Weiter + Neu starten for
+  failed/cancelled; "Skript prüfen" link only when a script exists; Löschen
+  with dialog.
+- Log: fixed - `<details>` keeps its open/closed state across HTMX swaps
+  (localStorage key per job).
+- Status labels: fixed - one function `web/labels.py status_label()` maps every
+  status id to German label + icon + color class; no raw id in the UI.
+- Review page: fixed - original text next to script text (two columns wide,
+  stacked narrow), chunk header shows the chapter title, warnings as readable
+  text, textareas grow with content, per-chunk HTMX save without page jump and
+  with "Gespeichert", filter "Nur Warnungen anzeigen".
+- Settings: fixed - read-only table; each test button spins while running and
+  shows clear success/error/warn text next to it.

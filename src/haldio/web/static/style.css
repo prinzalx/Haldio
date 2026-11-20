@@ -33,8 +33,10 @@ a { color: #7fb2ff; }
 .badge-done { background: #1f6f3d; }
 .badge-failed { background: #8a2f2f; }
 .badge-cancelled { background: #5a5a5a; }
-.badge-editing, .badge-speaking, .badge-mastering, .badge-extracting { background: #274d7a; }
+.badge-editing, .badge-speaking, .badge-mastering, .badge-extracting,
+.badge-planning, .badge-verifying { background: #274d7a; }
 .badge-waiting_for_user { background: #8a6d1f; }
+.badge-awaiting_review, .badge-awaiting_tts { background: #5b4a8a; }
 dialog {
   border: 0; border-radius: 8px; padding: 16px 20px;
   background: #232a31; color: #e8eaed;
@@ -65,4 +67,81 @@ code { background: #101418; padding: 1px 4px; border-radius: 4px; }
   background: #101418; border: 1px solid #2c343d; border-radius: 6px;
   font-family: Consolas, monospace; font-size: 12px; line-height: 1.45;
   white-space: pre-wrap;
+}
+
+/* --- correction 4: upload card --- */
+.upload { display: block; }
+.dropzone {
+  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  border: 2px dashed #2c343d; border-radius: 8px; padding: 14px;
+  cursor: pointer; text-align: center;
+}
+.dropzone.hover { border-color: #7fb2ff; }
+.dropzone input[type="file"] { width: 100%; color: #8a939c; font-size: 12px; }
+.upload-options { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 8px; }
+.upload-options label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #8a939c; }
+.upload-options label.check { flex-direction: row; align-items: center; color: #e6e6e6; font-size: 14px; }
+select {
+  background: #101418; color: #e6e6e6; border: 1px solid #2c343d;
+  border-radius: 6px; padding: 4px 6px; font: inherit;
+}
+button:disabled { opacity: 0.5; cursor: wait; }
+
+/* --- correction 4: job list rows --- */
+ul.joblist { list-style: none; margin: 0; padding: 0; }
+.jobrow {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  border-bottom: 1px solid #2c343d; padding: 8px 0;
+}
+.jobmain { flex: 1 1 240px; min-width: 0; }
+.jobtitle { font-weight: 600; }
+.jobstate { display: flex; gap: 6px; align-items: center; }
+.empty { color: #8a939c; font-style: italic; }
+.banner { border-color: #8a6d1f; }
+
+/* --- correction 4: stepper --- */
+ol.stepper {
+  display: flex; flex-wrap: wrap; gap: 4px; list-style: none;
+  margin: 0 0 10px; padding: 0; font-size: 12px;
+}
+.step {
+  display: flex; gap: 4px; align-items: center; padding: 2px 8px;
+  border-radius: 12px; background: #232a31; color: #8a939c;
+}
+.step-done { color: #7fce9a; }
+.step-current { background: #274d7a; color: #fff; }
+.step-failed { background: #8a2f2f; color: #fff; }
+.step-state { font-size: 11px; color: #8a939c; }
+
+/* --- correction 4: summary and result cards --- */
+.summary { border-top: 1px solid #2c343d; margin-top: 10px; padding-top: 6px; }
+.result audio { width: 100%; margin: 6px 0; }
+.downloads a { margin-right: 8px; }
+.warn-text { color: #e3b34c; }
+
+/* --- correction 4: review page --- */
+.filter { font-size: 13px; }
+.chunks.only-warn .chunk:not(.warn) { display: none; }
+.chunk-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.chunk-cols h3 { font-size: 12px; margin: 2px 0; color: #8a939c; }
+.original {
+  margin: 0; padding: 6px; background: #101418; border: 1px solid #2c343d;
+  border-radius: 6px; font-family: Consolas, monospace; font-size: 12px;
+  white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto;
+}
+textarea { field-sizing: content; min-height: 44px; max-height: 400px; }
+ul.warnings { margin: 4px 0; padding-left: 18px; color: #e3b34c; font-size: 13px; }
+.saved { color: #7fce9a; font-size: 13px; }
+table.config { width: 100%; border-collapse: collapse; }
+table.config th, table.config td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #2c343d; }
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
+.result-ok { color: #7fce9a; }
+.result-error { color: #ff9a9a; }
+.result-warn { color: #e3b34c; }
+.toast[aria-live] { position: fixed; right: 12px; bottom: 12px; }
+
+@media (max-width: 640px) {
+  .chunk-cols { grid-template-columns: 1fr; }
+  .jobrow { flex-direction: column; align-items: start; }
 }

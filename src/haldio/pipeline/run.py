@@ -137,6 +137,7 @@ def run_script(
     out_dir: Path,
     client_factory: Callable[[], LlmClient] | None = None,
     progress: Callable[[str, int], None] | None = None,
+    language: str = "",
 ) -> ScriptResult:
     """Run S1..S7 and write the job folder layout."""
     report = progress or (lambda _stage, _value: None)
@@ -152,7 +153,8 @@ def run_script(
     doc_map = build_doc_map(document)
     _write_json(out_dir / "02_plan" / "doc_map.json", doc_map)
 
-    target_language = document.language if document.language in ("de", "en") else "de"
+    detected = document.language if document.language in ("de", "en") else "de"
+    target_language = language if language in ("de", "en") else detected
     chunks = make_chunks(document, config.llm.max_input_tokens, dict(config.policies))
 
     system_prompt, examples = load_prompt_version(config)
@@ -241,17 +243,19 @@ def run_book(
     stop_after_script: bool = False,
     stop_before_tts: bool = False,
     gate: Callable[[str], None] | None = None,
+    language: str = "",
 ) -> BookResult:
     """Run S1..S9: PDF in, script, unit audio and master files out.
 
     stop_after_script pauses at the review gate; stop_before_tts pauses in the
     ready2tts pool so the user can free memory before the TTS worker starts.
     gate(note) blocks the stage until the user presses Continue (manual model swap).
+    language ("de"/"en") overrides the detected document language.
     """
     report = progress or (lambda _stage, _value, _note="": None)
     if gate and not llm_reachable(config.llm):
         gate("LLM starten, dann Weiter drücken.")
-    script = run_script(pdf_path, config, out_dir, client_factory, progress)
+    script = run_script(pdf_path, config, out_dir, client_factory, progress, language)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
     if stop_after_script:

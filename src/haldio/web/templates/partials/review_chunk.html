@@ -1,0 +1,31 @@
+<div class="chunk{% if entry.needs_review or entry.warnings %} warn{% endif %}" id="chunk-{{ entry.ci }}">
+  <form method="post" action="/jobs/{{ job.id }}/review/chunk"
+        hx-post="/jobs/{{ job.id }}/review/chunk" hx-target="#chunk-{{ entry.ci }}"
+        hx-swap="outerHTML">
+    <h2>{{ entry.chapter or entry.chunk.chunk_id }}
+      {% if entry.needs_review %}<span class="badge badge-failed">Review</span>{% endif %}
+    </h2>
+    {% if entry.warnings %}
+    <ul class="warnings">
+      {% for w in entry.warnings %}<li>⚠ {{ w }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <div class="chunk-cols">
+      <div class="col">
+        <h3>Original</h3>
+        <pre class="original">{{ entry.original or "—" }}</pre>
+      </div>
+      <div class="col">
+        <h3>Skript</h3>
+        {% for block in entry.chunk.blocks %}
+        <textarea name="c{{ entry.ci }}b{{ loop.index0 }}" rows="3">{{ block.text }}</textarea>
+        {% endfor %}
+      </div>
+    </div>
+    <input type="hidden" name="ci" value="{{ entry.ci }}">
+    <p class="actions">
+      <button type="submit">💾 Speichern</button>
+      {% if saved and saved_ci == entry.ci %}<span class="saved">Gespeichert</span>{% endif %}
+    </p>
+  </form>
+</div>

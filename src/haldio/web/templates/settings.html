@@ -3,15 +3,22 @@
 {% block content %}
 <section class="card">
   <h1>⚙️ Einstellungen</h1>
-  <table class="jobs">
+  <table class="config">
     <tr><th>LLM (Editor)</th><td>{{ config.llm.base_url }} · Modell {{ config.llm.model }}</td>
-        <td><button hx-get="/settings/test-llm" hx-target="#llm-test">Test LM Studio</button>
-        <span id="llm-test"></span></td></tr>
+        <td>
+          <button hx-get="/settings/test-llm" hx-target="#llm-test" hx-indicator="#llm-spin">Test LM Studio</button>
+          <span id="llm-spin" class="htmx-indicator">⏳</span>
+          <span id="llm-test" class="test-result"></span>
+        </td></tr>
     <tr><th>TTS (Sprecher)</th>
-        <td>{{ config.tts.model_id }} · Backend {{ config.tts.backend }} · Modus {{ config.tts.mode }} · Stimme {{ config.tts.speaker or "(Standard)" }}</td>
-        <td><button hx-post="/settings/test-tts" hx-target="#tts-test">Test TTS</button>
-        <span id="tts-test"></span>
-        <p class="muted">Startet den TTS-Server — vorher das LLM entladen.</p></td></tr>
+        <td>{% if config.tts.backend == "qwencpp" %}{{ config.tts.qwencpp_model }} · Port {{ config.tts.qwencpp_port }}{% else %}{{ config.tts.model_id }}{% endif %}
+            · Backend {{ config.tts.backend }} · Modus {{ config.tts.mode }} · Stimme {{ config.tts.speaker or "(Standard)" }}</td>
+        <td>
+          <button hx-post="/settings/test-tts" hx-target="#tts-test" hx-indicator="#tts-spin">Test TTS</button>
+          <span id="tts-spin" class="htmx-indicator">⏳</span>
+          <span id="tts-test" class="test-result"></span>
+          <p class="muted">Startet den TTS-Server — vorher das LLM entladen.</p>
+        </td></tr>
     <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>
     <tr><th>Server</th><td>{{ config.server.host }}:{{ config.server.port }}</td><td></td></tr>
   </table>

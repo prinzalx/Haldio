@@ -8,6 +8,7 @@ three German units and prints timing + RTF. Run with the LLM stopped:
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import time
@@ -51,6 +52,11 @@ def main() -> int:
         voices = [str(v.id) for v in backend.list_voices()]
         print(f"voices ({len(voices)}): {', '.join(voices[:20])}")
         print(f"dylan listed: {'dylan' in [v.lower() for v in voices]}")
+        # the library page reads this list instead of starting tts-server itself
+        voices_file = Path(config.paths.data_dir) / "voices.json"
+        voices_file.parent.mkdir(parents=True, exist_ok=True)
+        voices_file.write_text(json.dumps(voices, ensure_ascii=False), encoding="utf-8")
+        print(f"voices written to {voices_file}")
         items = [(text, out_dir / f"check{i}.wav") for i, text in enumerate(SAMPLES)]
         start = time.monotonic()
         durations = backend.synthesize_batch(items, "de", TTSParams(voice=tts.speaker))

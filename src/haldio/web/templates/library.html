@@ -3,32 +3,69 @@
 {% block content %}
 <section class="card">
   <h1>📚 Bücherei</h1>
-  <form method="post" action="/upload" enctype="multipart/form-data" class="upload">
-    <input type="file" name="file" accept="application/pdf" required>
-    <button type="submit">Hochladen</button>
+  <form method="post" action="/upload" enctype="multipart/form-data" id="upload-form" class="upload">
+    <label class="dropzone" id="dropzone">
+      <input type="file" name="file" id="file" accept="application/pdf" required>
+      <span id="file-info" class="muted">PDF hierher ziehen oder Datei wählen</span>
+    </label>
+    <div class="upload-options">
+      <label>Sprache
+        <select name="language">
+          <option value="auto" selected>Automatisch</option>
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+        </select>
+      </label>
+      <label>Stimme
+        <select name="voice">
+          {% for v in voices %}
+          <option value="{{ v }}"{% if v == selected_voice %} selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="review" value="true">
+        Skript vor der Sprachausgabe prüfen</label>
+      <button type="submit" id="upload-btn">Hochladen</button>
+    </div>
   </form>
 </section>
-<section class="card">
-  <h2>🎧 Jobs <span class="chip">{{ jobs | length }}</span></h2>
-  {% set ready = jobs | selectattr("status", "equalto", "awaiting_tts") | list %}
-  {% if ready %}
-  <p class="muted">Bereit für Sprachausgabe: {{ ready | length }} — andere lokale LLM
-     beenden, dann starten.</p>
+{% set ready = jobs | selectattr("status", "equalto", "awaiting_tts") | list %}
+{% if ready %}
+<section class="card banner">
+  <p><strong>{{ ready | length }} {{ "Job" if ready | length == 1 else "Jobs" }} warten auf die Sprachausgabe.</strong><br>
+     <span class="muted">Vorher das LLM in LM Studio entladen — der TTS-Server startet sonst
+     nicht.</span></p>
   <form method="post" action="/tts-pool/start">
     <button type="submit">🔊 Alle TTS starten</button>
   </form>
-  {% endif %}
+</section>
+{% endif %}
+<section class="card">
+  <h2>🎧 Jobs <span class="chip">{{ jobs | length }}</span></h2>
   {% if jobs %}
-  <table class="jobs">
-    <tr><th>Datei</th><th>Status</th><th>Fortschritt</th><th></th></tr>
+  <ul class="joblist">
     {% for job in jobs %}
-    <tr>
-      <td><a href="/jobs/{{ job.id }}">{{ job.file_name }}</a></td>
-      <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
-      <td><progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%</td>
-      <td class="actions">
-        <button class="danger" type="button" title="Löschen"
-                onclick="document.getElementById('del-{{ job.id }}').showModal()">🗑</button>
+    {% set lbl = job.status | status_label %}
+    <li class="jobrow">
+      <div class="jobmain">
+        <a class="jobtitle" href="/jobs/{{ job.id }}">{{ job.title or job.file_name }}</a>
+        <p class="muted">{{ job.file_name }}
+          · {{ job.page_count or "?" }} Seiten
+          · {% if job.audio_seconds %}{{ job.audio_seconds | seconds }}{% else %}— Audio{% endif %}
+          · {{ job.created_at | date }}</p>
+      </div>
+      <div class="jobstate">
+        <span class="badge badge-{{ job.status }}">{{ lbl.icon }} {{ lbl.label }}</span>
+        <progress value="{{ job.progress }}" max="100"></progress>
+        <span class="muted">{{ job.progress }}%</span>
+      </div>
+      <div class="actions">
+        <a href="/jobs/{{ job.id }}">Öffnen</a>
+        {% if job.status == "done" %}
+        <a href="/jobs/{{ job.id }}/download/book.mp3">Herunterladen</a>
+        {% endif %}
+        <button class="danger" type="button"
+                onclick="document.getElementById('del-{{ job.id }}').showModal()">🗑 Löschen</button>
         <dialog id="del-{{ job.id }}">
           <form method="post" action="/jobs/{{ job.id }}/delete">
             <p><strong>{{ job.file_name }}</strong></p>
@@ -39,12 +76,12 @@
             </p>
           </form>
         </dialog>
-      </td>
-    </tr>
+      </div>
+    </li>
     {% endfor %}
-  </table>
+  </ul>
   {% else %}
-  <p class="muted">Noch keine Jobs. Laden Sie ein PDF hoch.</p>
+  <p class="empty">Noch keine Jobs. Laden Sie ein PDF hoch.</p>
   {% endif %}
 </section>
 {% endblock %}

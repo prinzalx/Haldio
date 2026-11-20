@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import traceback
 from collections import deque
 from collections.abc import Callable
@@ -29,6 +30,42 @@ _STAGE_LABELS = {
 
 class _Cancelled(Exception):
     pass
+
+
+def _format_eta(seconds: int) -> str:
+    minutes, secs = divmod(max(0, seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours} h {minutes} min"
+    if minutes:
+        return f"{minutes} min"
+    return f"{secs} s"
+
+
+def _stage_message(stage: str, value: int, note: str, speak_state: dict[str, Any]) -> str:
+    """German progress line; during speaking it counts units and measures the ETA.
+
+    The ETA uses only the real speed of the units finished in this run; before
+    the second unit there is no estimate and no hard-coded factor is used.
+    """
+    if stage == "speaking" and "/" in note:
+        done_text, _, total_text = note.partition("/")
+        try:
+            done, total = int(done_text), int(total_text)
+        except ValueError:
+            return f"{_STAGE_LABELS.get(stage, stage)} {value}%"
+        if done >= 0 and total > 0:
+            message = f"Einheit {done} von {total}"
+            now = time.monotonic()
+            if speak_state["t0"] is None:
+                speak_state["t0"] = now
+                speak_state["first"] = done
+            elapsed = now - float(speak_state["t0"])
+            if done > int(speak_state["first"]) and done < total:
+                per_unit = elapsed / (done - int(speak_state["first"]))
+                message += f" · noch ca. {_format_eta(int((total - done) * per_unit))}"
+            return message
+    return f"{_STAGE_LABELS.get(stage, stage)} {value}%".strip()
 
 
 class Worker:
@@ -134,13 +171,15 @@ class Worker:
         # re-seed the in-memory tail so a restart keeps the last log lines
         self._job_logs[job_id] = deque(job.logs[-_LOG_TAIL:], maxlen=_LOG_TAIL)
 
+        speak_state: dict[str, Any] = {"t0": None, "first": 0}
+
         def progress(stage: str, value: int, note: str = "") -> None:
             if job_id in self._cancelled:
                 raise _Cancelled()
-            message = f"{stage} {note}".strip()
             job.status = stage
             job.progress = value
-            job.message = message or job.message
+            job.options["stage"] = stage
+            job.message = _stage_message(stage, value, note, speak_state)
             self._log(job, f"{stage} {value}% {note}".strip())
             self.index.update(job)
 
@@ -181,12 +220,20 @@ class Worker:
                     self.config,
                     folder,
                     progress=progress,
-                    stop_after_script=self.config.editor.review_before_tts,
+                    stop_after_script=bool(
+                        job.options.get("review", self.config.editor.review_before_tts)
+                    ),
                     stop_before_tts=self.config.tts.confirm_before_start,
                     gate=wait_gate,
+                    language=str(job.options.get("language", "auto")),
                 )
             if job_id in self._cancelled:
                 raise _Cancelled()
+            meta = result.script.doc_meta or {}
+            if meta.get("title"):
+                job.title = str(meta["title"])
+            if meta.get("page_count"):
+                job.page_count = int(meta["page_count"])
             if result.review_paused:
                 job.status = "awaiting_review"
                 job.progress = 60

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,7 @@ from haldio.jobs.index import Job, JobIndex
 from haldio.jobs.worker import Worker
 from haldio.pipeline.assemble import render_script_md
 from haldio.tts.base import ModelGuardError
+from haldio.web.labels import stage_rows, status_label, warning_text
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -35,6 +38,9 @@ def create_app(
     app.state.worker.start()
     templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
     templates.env.filters["seconds"] = _format_seconds
+    templates.env.filters["status_label"] = status_label
+    templates.env.filters["warning_text"] = warning_text
+    templates.env.filters["date"] = _format_date
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
     @app.middleware("http")
@@ -53,13 +59,22 @@ def create_app(
     def library(request: Request) -> HTMLResponse:
         jobs = app.state.index.list()
         return templates.TemplateResponse(
-            request, "library.html", {"jobs": jobs, "version": __version__}
+            request,
+            "library.html",
+            {
+                "jobs": jobs,
+                "version": __version__,
+                "voices": _available_voices(config),
+                "selected_voice": config.tts.speaker or "dylan",
+            },
         )
 
     @app.post("/upload")
     async def upload(
         file: UploadFile = File(...),  # noqa: B008 - FastAPI pattern
-        voice: str = Form(""),
+        voice: str = Form("dylan"),
+        language: str = Form("auto"),
+        review: bool = Form(False),
     ) -> RedirectResponse:
         name = file.filename or "upload.pdf"
         if not name.lower().endswith(".pdf"):
@@ -68,7 +83,11 @@ def create_app(
         data = await _read_limited(file, limit)
         if not data.startswith(b"%PDF-"):
             raise HTTPException(status_code=400, detail="Datei ist kein PDF (Magic Bytes).")
-        job = app.state.index.create(name, options={"voice": voice})
+        options = {"voice": voice, "language": language, "review": review}
+        job = app.state.index.create(name, options=options)
+        if language in ("de", "en"):
+            job.language = language
+            app.state.index.update(job)
         folder = app.state.index.jobs_dir / job.id
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "source.pdf").write_bytes(data)
@@ -79,13 +98,7 @@ def create_app(
     def job_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request,
-            "job.html",
-            {
-                "job": job,
-                "files": _job_files(job),
-                "has_script": _has_script(app.state.index, job_id),
-            },
+            request, "job.html", _job_context(app.state.index, job_id, job)
         )
 
     @app.get("/api/jobs/{job_id}")
@@ -96,18 +109,12 @@ def create_app(
     def job_status(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request,
-            "partials/job_status.html",
-            {
-                "job": job,
-                "files": _job_files(job),
-                "has_script": _has_script(app.state.index, job_id),
-            },
+            request, "partials/job_status.html", _job_context(app.state.index, job_id, job)
         )
 
     @app.get("/jobs/{job_id}/download/{file_name}")
     def download(job_id: str, file_name: str) -> FileResponse:
-        _require_job(app.state.index, job_id)
+        job = _require_job(app.state.index, job_id)
         if file_name not in _DOWNLOADABLE:
             raise HTTPException(status_code=404, detail="Unbekannte Datei.")
         candidates = [
@@ -117,15 +124,14 @@ def create_app(
         ]
         for path in candidates:
             if path.is_file():
-                return FileResponse(path, filename=f"{job_id}-{file_name}")
+                return FileResponse(path, filename=_download_name(job, file_name))
         raise HTTPException(status_code=404, detail="Datei noch nicht erzeugt.")
 
     @app.get("/jobs/{job_id}/review", response_class=HTMLResponse)
     def review_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
-        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
-        chunks = _load_chunks(script_file)
-        return templates.TemplateResponse(request, "review.html", {"job": job, "chunks": chunks})
+        entries = _review_entries(app.state.index, job_id)
+        return templates.TemplateResponse(request, "review.html", {"job": job, "entries": entries})
 
     @app.post("/jobs/{job_id}/review")
     async def review_save(job_id: str, request: Request) -> RedirectResponse:
@@ -139,12 +145,35 @@ def create_app(
                 key = f"c{ci}b{bi}"
                 if key in form:
                     block["text"] = str(form[key]).strip()
-        data["chunks"] = chunks
-        data["warnings"] = [w for c in chunks for w in c.get("warnings", [])]
-        script_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        # keep the markdown download in step with the edited script
-        (script_file.parent / "script.md").write_text(render_script_md(chunks), encoding="utf-8")
+        _write_script_files(script_file, data, chunks)
         return RedirectResponse(f"/jobs/{job_id}/review", status_code=303)
+
+    @app.post("/jobs/{job_id}/review/chunk", response_class=HTMLResponse)
+    async def review_save_chunk(
+        job_id: str, request: Request
+    ) -> HTMLResponse:  # HTMX saves one chunk and swaps it back
+        job = _require_job(app.state.index, job_id)
+        form = await request.form()
+        try:
+            ci = int(str(form.get("ci", "")))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Chunk-Nummer fehlt.") from None
+        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
+        data = json.loads(script_file.read_text(encoding="utf-8")) if script_file.is_file() else {}
+        chunks = data.get("chunks", [])
+        if ci < 0 or ci >= len(chunks):
+            raise HTTPException(status_code=404, detail="Chunk nicht gefunden.")
+        for bi, block in enumerate(chunks[ci].get("blocks", [])):
+            key = f"c{ci}b{bi}"
+            if key in form:
+                block["text"] = str(form[key]).strip()
+        _write_script_files(script_file, data, chunks)
+        entry = _review_entries(app.state.index, job_id)[ci]
+        return templates.TemplateResponse(
+            request,
+            "partials/review_chunk.html",
+            {"job": job, "entry": entry, "saved_ci": ci, "saved": True},
+        )
 
     @app.post("/jobs/{job_id}/speak")
     def speak_now(job_id: str) -> RedirectResponse:
@@ -204,7 +233,7 @@ def create_app(
             text = f"Fehler: {error}"
         except Exception as error:  # noqa: BLE001 - show any connection error in the UI
             text = f"Fehler: {error}"
-        return HTMLResponse(f"<span>{html.escape(text)}</span>")
+        return HTMLResponse(_result_span(text))
 
     @app.post("/settings/test-tts")
     def test_tts() -> HTMLResponse:
@@ -234,7 +263,7 @@ def create_app(
             text = f"Gestoppt: {error}"
         finally:
             backend.close()
-        return HTMLResponse(f"<span>{html.escape(text)}</span>")
+        return HTMLResponse(_result_span(text))
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str) -> RedirectResponse:
@@ -259,7 +288,111 @@ _DOWNLOADABLE = (
     "merged.wav",
     "script.md",
     "qa_report.html",
+    "source.pdf",
 )
+
+# result card slots: stored name -> German label shown in the UI
+_FILE_SLOTS = (
+    ("book.mp3", "MP3"),
+    ("book.ogg", "OGG"),
+    ("script.md", "Skript"),
+    ("qa_report.html", "QA-Bericht"),
+    ("source.pdf", "PDF"),
+)
+
+
+def _result_span(text: str) -> str:
+    """Test-button result with a clear success/error/warn class."""
+    cls = (
+        "result-error"
+        if text.startswith("Fehler")
+        else "result-warn"
+        if text.startswith("Gestoppt")
+        else "result-ok"
+    )  # noqa: E501
+    return f'<span class="{cls}">{html.escape(text)}</span>'
+
+
+def _format_date(value: str) -> str:
+    """ISO stamp to a short German date; the raw value when unparsable."""
+    try:
+        return datetime.fromisoformat(value).strftime("%d.%m.%Y %H:%M")
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _available_voices(config: Config) -> list[str]:
+    """Voice ids from the last check_qwencpp.py run (data/voices.json), no server start."""
+    path = Path(config.paths.data_dir) / "voices.json"
+    names: list[str] = []
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = []
+        names = [str(v) for v in payload if str(v).strip()]
+    if not names:
+        names = [config.tts.speaker or "dylan"]
+    return names
+
+
+def _load_doc_map(index: JobIndex, job_id: str) -> dict[str, Any]:
+    path = index.jobs_dir / job_id / "02_plan" / "doc_map.json"
+    if not path.is_file():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _job_context(index: JobIndex, job_id: str, job: Job) -> dict[str, Any]:
+    """Context shared by the job page and the polling status partial."""
+    return {
+        "job": job,
+        "status": status_label(job.status),
+        "stepper": stage_rows(job.status, str(job.options.get("stage", ""))),
+        "files": _job_files(index, job),
+        "has_script": _has_script(index, job_id),
+        "summary": _load_doc_map(index, job_id),
+    }
+
+
+def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
+    """Per chunk: script blocks, original text, chapter title and readable warnings."""
+    folder = index.jobs_dir / job_id
+    entries: list[dict[str, Any]] = []
+    for ci, chunk in enumerate(_load_chunks(folder / "04_script" / "script.json")):
+        original = ""
+        chapter = ""
+        src = folder / "03_edit" / "chunks" / f"{chunk.get('chunk_id', '')}.in.json"
+        if src.is_file():
+            try:
+                src_data = json.loads(src.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                src_data = {}
+            original = "\n".join(str(b.get("text", "")) for b in src_data.get("blocks", []))
+            chapter = str(src_data.get("chapter_path") or "")
+        entries.append(
+            {
+                "chunk": chunk,
+                "ci": ci,
+                "original": original,
+                "chapter": chapter,
+                "warnings": [warning_text(w) for w in chunk.get("warnings", [])],
+                "needs_review": bool(chunk.get("needs_review")),
+            }
+        )
+    return entries
+
+
+def _write_script_files(script_file: Path, data: dict[str, Any], chunks: list[Any]) -> None:
+    """Store the edited script.json and keep script.md and warnings in step."""
+    data["chunks"] = chunks
+    data["warnings"] = [w for c in chunks for w in c.get("warnings", [])]
+    script_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    (script_file.parent / "script.md").write_text(render_script_md(chunks), encoding="utf-8")
 
 
 async def _read_limited(file: UploadFile, limit: int) -> bytes:
@@ -281,10 +414,32 @@ def _require_job(index: JobIndex, job_id: str) -> Job:
     return job
 
 
-def _job_files(job: Job) -> list[dict[str, Any]]:
+def _job_files(index: JobIndex, job: Job) -> list[dict[str, Any]]:
+    """Download slots that exist on disk; empty until the job is done."""
     if job.status != "done":
         return []
-    return [{"name": name, "available": True} for name in _DOWNLOADABLE]
+    folder = index.jobs_dir / job.id
+    found: list[dict[str, Any]] = []
+    for name, label in _FILE_SLOTS:
+        for sub in ("06_master", "04_script", ""):
+            path = folder / sub / name if sub else folder / name
+            if path.is_file():
+                found.append(
+                    {
+                        "name": name,
+                        "label": label,
+                        "url": f"/jobs/{job.id}/download/{name}",
+                    }
+                )
+                break
+    return found
+
+
+def _download_name(job: Job, file_name: str) -> str:
+    """Download file name from the PDF title (<Titel>.mp3), job id as fallback."""
+    base = job.title or job.id
+    slug = re.sub(r"[^\wÄÖÜäöüß.-]+", "_", base, flags=re.UNICODE).strip("_.") or job.id
+    return f"{slug}{Path(file_name).suffix}"
 
 
 def _has_script(index: JobIndex, job_id: str) -> bool:

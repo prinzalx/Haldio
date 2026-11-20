@@ -43,6 +43,7 @@ def app_parts(tmp_path):
         stop_after_script=False,
         stop_before_tts=False,
         gate=None,
+        language="",
     ):
         calls.append(str(pdf_path))
         if progress:
@@ -69,6 +70,7 @@ def _gate_app(tmp_path, monkeypatch):
         stop_after_script=False,
         stop_before_tts=False,
         gate=None,
+        language="",
     ):
         if stop_before_tts:
             return BookResult(
@@ -508,3 +510,171 @@ def test_speak_now_sets_resume_option(app_parts) -> None:
     assert response.status_code == 303
     job = index.get(job_id)
     assert job.options.get("resume_from") == "speaking"
+
+
+# --- correction 4, section 3: page content ---
+
+
+def test_status_labels_are_german_for_every_status() -> None:
+    from haldio.jobs.index import STATUS_VALUES
+    from haldio.web.labels import status_label
+
+    for status in STATUS_VALUES:
+        data = status_label(status)
+        assert data["label"], f"{status} has no label"
+        assert data["icon"] and data["cls"], f"{status} has no icon/class"
+    assert status_label("done")["label"] == "Fertig"
+    assert status_label("failed")["label"] == "Fehlgeschlagen"
+    assert status_label("nope")["label"] == "nope"
+
+
+def test_stage_rows_marks_failed_stage() -> None:
+    from haldio.web.labels import stage_rows
+
+    rows = stage_rows("failed", "speaking")
+    states = [row["state"] for row in rows]
+    assert states == ["done", "done", "done", "done", "done", "failed", "pending"]
+
+
+def test_library_empty_text_and_job_title(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    assert "Noch keine Jobs. Laden Sie ein PDF hoch." in client.get("/").text
+    location = _upload_pdf(client)
+    job = index.get(location.rsplit("/", 1)[-1])
+    job.title = "Mein Buch"
+    index.update(job)
+    page = client.get("/")
+    assert "Mein Buch" in page.text
+    assert "Noch keine Jobs" not in page.text
+
+
+def test_upload_reads_form_fields(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post(
+        "/upload",
+        files={"file": ("test.pdf", b"%PDF-1.4 fake pdf body", "application/pdf")},
+        data={"voice": "dylan", "language": "de", "review": "true"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    job = index.get(response.headers["location"].rsplit("/", 1)[-1])
+    assert job.options["voice"] == "dylan"
+    assert job.options["language"] == "de"
+    assert job.options["review"] is True
+    assert job.language == "de"
+
+
+def test_library_banner_counts_waiting_jobs(tmp_path, monkeypatch) -> None:
+    app, index = _gate_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    _upload_pdf(client)
+    page = client.get("/")
+    assert "1 Job warten auf die Sprachausgabe" in page.text
+    assert "Alle TTS starten" in page.text
+
+
+def test_job_page_shows_german_label_and_stepper(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    page = client.get(location)
+    assert "Fertig" in page.text
+    assert "stepper" in page.text
+    assert "Mastern" in page.text
+
+
+def test_job_page_summary_card_from_doc_map(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    doc_map = index.jobs_dir / job_id / "02_plan" / "doc_map.json"
+    doc_map.parent.mkdir(parents=True, exist_ok=True)
+    doc_map.write_text(
+        '{"language": "de", "estimated_audio_seconds": 4200, "main_topics": ["Technik"]}',
+        encoding="utf-8",
+    )
+    page = client.get(location)
+    assert "Zusammenfassung" in page.text
+    assert "1 h 10 min" in page.text
+    assert "Technik" in page.text
+
+
+def test_result_card_lists_only_existing_files(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    page = client.get(location)
+    assert "<audio controls" in page.text
+    assert ">MP3<" in page.text
+    assert ">OGG<" not in page.text  # only book.mp3 was written by the fake
+    ogg = index.jobs_dir / job_id / "06_master" / "book.ogg"
+    ogg.write_bytes(b"OggS")
+    assert ">OGG<" in client.get(location).text
+
+
+def test_download_name_uses_job_title(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    job = index.get(job_id)
+    job.title = "Mein Buch"
+    index.update(job)
+    response = client.get(f"{location}/download/book.mp3")
+    assert "Mein_Buch.mp3" in response.headers["content-disposition"]
+
+
+def test_review_chunk_save_swaps_partial(app_parts) -> None:
+    import json
+
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    script_file = index.jobs_dir / job_id / "04_script" / "script.json"
+    script_file.parent.mkdir(parents=True, exist_ok=True)
+    script_file.write_text(
+        json.dumps(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "c0001",
+                        "blocks": [{"kind": "paragraph", "text": "Alter Text."}],
+                        "warnings": [{"type": "unclear_source", "detail": " Absatz 2."}],
+                        "needs_review": False,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    response = client.post(f"/jobs/{job_id}/review/chunk", data={"ci": "0", "c0b0": "Neuer Text."})
+    assert response.status_code == 200
+    assert "Gespeichert" in response.text
+    assert "unclear_source: Absatz 2." in response.text
+    saved = json.loads(script_file.read_text(encoding="utf-8"))
+    assert saved["chunks"][0]["blocks"][0]["text"] == "Neuer Text."
+    markdown = (script_file.parent / "script.md").read_text(encoding="utf-8")
+    assert "Neuer Text." in markdown
+
+
+def test_worker_reports_units_and_resume_language(tmp_path) -> None:
+    config = Config()
+    config.paths.data_dir = tmp_path
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf", options={"language": "de"})
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        if progress:
+            progress("speaking", 66, "12/61")
+        return _fake_result(out_dir)
+
+    worker = Worker(index, config, run_fn=run_fn, inline=True)
+    worker.enqueue(job.id)
+    done = index.get(job.id)
+    assert done.message == "Einheit 12 von 61"
+    assert done.options["stage"] == "speaking"

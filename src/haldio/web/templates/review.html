@@ -3,27 +3,23 @@
 {% block content %}
 <section class="card">
   <h1>📝 Skript — {{ job.file_name }}</h1>
-  {% if not chunks %}<p class="muted">Noch kein Skript vorhanden.</p>{% endif %}
-  <form method="post" action="/jobs/{{ job.id }}/review">
-    {% for chunk in chunks %}
-    {% set ci = loop.index0 %}
-    <div class="chunk {% if chunk.needs_review or chunk.warnings %}warn{% endif %}">
-      <h2>{{ chunk.chunk_id }}
-        {% if chunk.needs_review %}<span class="badge badge-failed">Review</span>{% endif %}
-        {% for w in chunk.warnings %}<span class="chip">{{ w }}</span>{% endfor %}
-      </h2>
-      {% for block in chunk.blocks %}
-      <textarea name="c{{ ci }}b{{ loop.index0 }}" rows="3">{{ block.text }}</textarea>
-      {% endfor %}
-    </div>
+  {% if not entries %}<p class="muted">Noch kein Skript vorhanden.</p>{% endif %}
+  {% if entries %}
+  <p class="filter">
+    <label><input type="checkbox" onchange="document.getElementById('chunks').classList.toggle('only-warn', this.checked)">
+      Nur Warnungen anzeigen</label>
+  </p>
+  {% endif %}
+  <div id="chunks" class="chunks">
+    {% for entry in entries %}
+    {% include "partials/review_chunk.html" %}
     {% endfor %}
-    {% if chunks %}<button type="submit">💾 Speichern</button>{% endif %}
-  </form>
+  </div>
   <p class="actions">
     <form method="post" action="/jobs/{{ job.id }}/speak">
       <button>🔊 Weiter zur Sprachausgabe</button>
     </form>
-    <a href="/jobs/{{ job.id }}">← Job</a>
+    <a href="/jobs/{{ job.id }}">⏪ Job</a>
   </p>
 </section>
 {% endblock %}

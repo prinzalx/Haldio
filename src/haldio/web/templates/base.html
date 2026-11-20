@@ -2,16 +2,58 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Haldio{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/vendor/htmx.min.js"></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">🎧 Haldio</a>
-    <a href="/settings">⚙️</a>
+    <a href="/">📚 Bücherei</a>
+    <a href="/settings">⚙️ Einstellungen</a>
     <span class="ver">v{{ version | default('dev') }}</span>
   </header>
   <main>{% block content %}{% endblock %}</main>
+  <div id="toast" class="toast" aria-live="polite"></div>
+  <script>
+  // the log <details> keeps its open/closed state across HTMX swaps
+  document.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (d.matches && d.matches("details[data-log]")) {
+      try { localStorage.setItem("haldio-log-" + d.dataset.log, d.open ? "open" : "closed"); } catch (err) {}
+    }
+  }, true);
+  document.addEventListener("htmx:afterSwap", () => {
+    document.querySelectorAll("details[data-log]").forEach((d) => {
+      let saved = null;
+      try { saved = localStorage.getItem("haldio-log-" + d.dataset.log); } catch (err) {}
+      if (saved !== null) d.open = saved === "open";
+    });
+  });
+  // upload card: chosen file name + size, drag & drop, disable button while uploading
+  (function () {
+    const input = document.getElementById("file");
+    const info = document.getElementById("file-info");
+    if (!input || !info) return;
+    const show = () => {
+      const f = input.files[0];
+      info.textContent = f ? f.name + " (" + Math.round(f.size / 1024) + " kB)"
+                           : "PDF hierher ziehen oder Datei wählen";
+    };
+    input.addEventListener("change", show);
+    const zone = document.getElementById("dropzone");
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("hover"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("hover"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault(); zone.classList.remove("hover");
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; show(); }
+    });
+    document.getElementById("upload-form").addEventListener("submit", () => {
+      document.getElementById("upload-btn").disabled = true;
+    });
+  })();
+  </script>
 </body>
 </html>
