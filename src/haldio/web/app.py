@@ -66,6 +66,10 @@ def create_app(
             request, "job.html", {"job": job, "files": _job_files(job)}
         )
 
+    @app.get("/api/jobs/{job_id}")
+    def job_api(job_id: str) -> dict[str, Any]:
+        return _require_job(app.state.index, job_id).to_dict()
+
     @app.get("/jobs/{job_id}/status", response_class=HTMLResponse)
     def job_status(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)

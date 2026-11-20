@@ -6,14 +6,16 @@ import threading
 import traceback
 from collections import deque
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from haldio.config import Config
-from haldio.jobs.index import JobIndex
+from haldio.jobs.index import Job, JobIndex
 from haldio.pipeline.run import BookResult, run_book, run_speech
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
+_LOG_TAIL = 30
 
 
 class _Cancelled(Exception):
@@ -38,6 +40,7 @@ class Worker:
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._cancelled: set[str] = set()
+        self._job_logs: dict[str, deque[str]] = {}
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
@@ -76,6 +79,22 @@ class Worker:
             job.status = "cancelled"
             self.index.update(job)
 
+    def _log_lines(self, job_id: str) -> deque[str]:
+        return self._job_logs.setdefault(job_id, deque(maxlen=_LOG_TAIL))
+
+    def _log(self, job: Job, line: str) -> None:
+        try:
+            stamp = datetime.now(UTC).strftime("%H:%M:%S")
+            entry = f"{stamp} {line}"
+            self._log_lines(job.id).append(entry)
+            job.logs = list(self._log_lines(job.id))
+            path = self.index.jobs_dir / job.id / "worker.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(entry + "\n")
+        except OSError:
+            pass
+
     def _loop(self) -> None:
         while True:
             with self._lock:
@@ -91,12 +110,17 @@ class Worker:
         job = self.index.get(job_id)
         if job is None or job.status == "cancelled":
             return
+        # re-seed the in-memory tail so a restart keeps the last log lines
+        self._job_logs[job_id] = deque(job.logs[-_LOG_TAIL:], maxlen=_LOG_TAIL)
 
-        def progress(stage: str, value: int) -> None:
+        def progress(stage: str, value: int, note: str = "") -> None:
             if job_id in self._cancelled:
                 raise _Cancelled()
+            message = f"{stage} {note}".strip()
             job.status = stage
             job.progress = value
+            job.message = message or job.message
+            self._log(job, f"{stage} {value}% {note}".strip())
             self.index.update(job)
 
         try:

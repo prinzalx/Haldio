@@ -237,7 +237,7 @@ def run_book(
     stop_after_script pauses at the review gate; stop_before_tts pauses in the
     ready2tts pool so the user can free memory before the TTS worker starts.
     """
-    report = progress or (lambda _stage, _value: None)
+    report = progress or (lambda _stage, _value, _note="": None)
     script = run_script(pdf_path, config, out_dir, client_factory, progress)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
@@ -259,7 +259,9 @@ def run_book(
             out_dir,
             script.language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
-            progress=lambda done, total: report("speaking", 65 + int(20 * done / max(1, total))),
+            progress=lambda done, total: report(
+                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total}"
+            ),
         )
     finally:
         backend.close()
@@ -283,10 +285,10 @@ def run_speech(
     language: str,
     backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
     pronunciations_path: Path | None = None,
-    progress: Callable[[str, int], None] | None = None,
+    progress: Callable[..., None] | None = None,
 ) -> BookResult:
     """Run only S8 and S9 for a job whose script.json already exists (after review)."""
-    report = progress or (lambda _stage, _value: None)
+    report = progress or (lambda *_a: None)
     script = ScriptResult(out_dir=out_dir, chunks=0, language=language)
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
@@ -301,7 +303,9 @@ def run_speech(
             out_dir,
             language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
-            progress=lambda done, total: report("speaking", 65 + int(20 * done / max(1, total))),
+            progress=lambda done, total: report(
+                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total}"
+            ),
         )
     finally:
         backend.close()

@@ -35,8 +35,9 @@ def app_parts(tmp_path):
     index = JobIndex(tmp_path / "data")
     calls: list[str] = []
 
-    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False,
-               stop_before_tts=False):
+    def run_fn(
+        pdf_path, cfg, out_dir, progress=None, stop_after_script=False, stop_before_tts=False
+    ):
         calls.append(str(pdf_path))
         if progress:
             progress("editing", 30)
@@ -54,11 +55,14 @@ def _gate_app(tmp_path, monkeypatch):
     config.paths.data_dir = tmp_path
     index = JobIndex(tmp_path / "data")
 
-    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False,
-               stop_before_tts=False):
+    def run_fn(
+        pdf_path, cfg, out_dir, progress=None, stop_after_script=False, stop_before_tts=False
+    ):
         if stop_before_tts:
             return BookResult(
-                ScriptResult(out_dir=out_dir, chunks=2), SpeakResult(), MasterResult(),
+                ScriptResult(out_dir=out_dir, chunks=2),
+                SpeakResult(),
+                MasterResult(),
                 tts_gate=True,
             )
         return _fake_result(out_dir)
@@ -127,6 +131,17 @@ def test_upload_runs_job_and_shows_done(app_parts) -> None:
     assert page.status_code == 200
     assert "badge-done" in page.text
     assert "book.mp3" in page.text
+
+
+def test_job_api_exposes_logs(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    response = client.get(f"/api{location}")
+    assert response.status_code == 200
+    body = response.json()
+    assert "logs" in body
+    assert any("editing 30%" in line for line in body["logs"])
 
 
 def test_upload_rejects_non_pdf(app_parts) -> None:
