@@ -110,6 +110,7 @@ class Worker:
                     folder,
                     progress=progress,
                     stop_after_script=self.config.editor.review_before_tts,
+                    stop_before_tts=self.config.tts.confirm_before_start,
                 )
             if job_id in self._cancelled:
                 raise _Cancelled()
