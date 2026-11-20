@@ -32,6 +32,8 @@ uv run uvicorn haldio.web:app --port 8505   # web server (M4)
 - Code, comments, commits and docs in English (simple words, short sentences). Web UI in German.
 - Conventional Commits. Test with each change; run tests before each commit.
 - Never commit secrets, PDFs, audio files or model files.
+- **Never start TTS automatically.** Loading Qwen3-TTS needs a user order; an unrequested
+  model load crashes the system. Only run stages S8/S9 (speak/master) when the user asks.
 
 ## Open questions
 
