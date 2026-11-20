@@ -1,5 +1,7 @@
 # Brief for the coding agent: PDF-to-audiobook tool (working name: Haldio)
 
+Corrected by Correction 1.
+
 ## 1. Your role
 
 You are a senior Python engineer. You work alone in a local folder on my computer. You build a tool that converts technical PDF documents into audiobooks. All AI models run on my computer. No document data leaves my computer.
@@ -37,13 +39,27 @@ The tool joins three parts:
 
 ## 5. Fixed technical decisions
 
-- Python 3.11 or newer. Use `uv` for the environment and the dependencies. Use `pyproject.toml`.
-- Backend: FastAPI. UI: server-rendered Jinja2 templates with HTMX. Do not use a Node build step.
-- Job index & Artifacts: files on disk.
-- LLM: the same you are using. should be an option to enter url in the gui nad refresh models or select one / enter one 
-- TTS: Qwen3-TTS. I prepare it. You do not install it. You use an adapter interface and you ask me how to call it. same as LLM
+Corrected by Correction 1: the TTS parts below are replaced.
+
+- Python 3.12. The official `qwen-tts` package recommends a clean Python 3.12
+  environment. The main tool runs on `uv`; the TTS worker can use its own
+  interpreter (`tts.worker_python`).
+- Backend: FastAPI. UI: server-rendered Jinja2 templates with HTMX. Do not use a
+  Node build step.
+- Job index & artifacts: files on disk.
+- LLM: no change. LM Studio provides the text LLM only, through its
+  OpenAI-compatible API.
+- TTS: our tool runs Qwen3-TTS itself. Use the official Python package `qwen-tts`
+  (PyPI) and its class `Qwen3TTSModel`. Do not use LM Studio, an HTTP server, or
+  GGUF for TTS.
+- The model weights come from Hugging Face (Qwen/... repos). They are stored on
+  this computer. Default model: `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (voice clone from
+  a reference clip). Also support `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` (preset
+  voices). Never hard-code model ids. They are config values.
 - Audio processing: `ffmpeg` and `ffprobe` (system programs).
-- The web server listens on 0.0.0. only. At run time, the tool makes no network calls except to LM Studio and to the TTS service.
+- The web server listens on 127.0.0.1. At run time, the tool makes no network
+  calls except to LM Studio. Downloading the model weights is a separate one-time
+  command (see 9.4).
 
 ## 6. Fork or new project
 
@@ -61,7 +77,7 @@ Do this:
 
 ## 7. Pipeline
 
-The stages run in strict sequence. Each stage reads files and writes files. Each stage can run again alone. The LLM and the TTS model do not need to be in memory at the same time. Add the optional config hooks `before_stage_command` and `after_stage_command`, so that I can unload a model between stages.
+The stages run in strict sequence. Each stage reads files and writes files. Each stage can run again alone. The LLM and the TTS model do not need to be in memory at the same time. The optional config hooks `before_edit`, `after_edit`, `before_speak`, `after_speak` (Correction 1, replaces the earlier two hooks) let me unload a model between stages.
 
 Cache key of an editor result: hash of (input, prompt version, model id, parameters). After a crash, skip all results that have a valid cache key.
 
@@ -79,7 +95,7 @@ Cache key of an editor result: hash of (input, prompt version, model id, paramet
 
 Start with PyMuPDF and `pymupdf4llm` behind an `Extractor` interface. If the table results are bad, evaluate Docling as an alternative. Note: PyMuPDF has the AGPL license. Record this in `docs/decisions/` and tell me.
 
-Add the CLI command `hoerbuch inspect <pdf>`. It prints the outline, the block counts, the tables, and the cross-references, so that I can check the structure.
+Add the CLI command `haldio inspect <pdf>`. It prints the outline, the block counts, the tables, and the cross-references, so that I can check the structure.
 
 **S3 Plan.** Build `doc_map.json`. Use code first and the LLM second.
 
@@ -231,18 +247,89 @@ Note: the spoken text does not say what U and I mean, because the source does no
 | `bibliography` | `announce` | One sentence only. |
 | `urls` | `speak_short` | Speak short URLs. Replace very long URLs by a short spoken note. |
 
-## 9. Speaker (TTS)
+## 9. Speaker (TTS) — replaced by Correction 1
 
-- Define a `TTSBackend` interface: `synthesize(text, language, voice, params)`, `list_voices()`, `healthcheck()`.
-- Implement `MockTTSBackend` first. It makes silence or a tone with a length that depends on the text length. With it, you can test the full pipeline without Qwen3-TTS.
-- Implement `QwenTTSBackend` after I tell you how Qwen3-TTS is called.
-- Keep two texts. `script_text` is the faithful, human-readable script. `tts_text` is derived from it by code, only for the TTS input:
-  1. Convert the remaining digit strings to words (`num2words`, German and English). Handle decimals, thousands separators, and percent.
-  2. Make identifiers speakable: file names, paths, URLs, underscores, dots, slashes.
-  3. Apply the optional lexicon `pronunciations.yaml` (term to spoken respelling).
-  Never write these changes into `script_text`. Test each rule with unit tests. After tests with Qwen3-TTS, you can drop rule 1 if the model reads digits well.
-- Split `tts_text` into units at sentence ends (use `pysbd`). Maximum characters per unit: config value. Merge very short sentences. If a sentence is too long, cut it at a comma.
-- Cache each audio unit by hash of (text, voice, language, parameters). After a crash, resume from the cache.
+### 9.1 Architecture
+
+- Keep the `TTSBackend` interface and `MockTTSBackend`.
+- Add `QwenLocalBackend`. It does not load the model in the web server process.
+  It starts a worker subprocess: `python -m haldio.tts_worker` (package and
+  command are both `haldio`).
+- Reasons for the worker: when the worker exits, it frees the GPU memory, so LM
+  Studio and Qwen3-TTS never compete for the GPU; a crash in torch or CUDA does
+  not stop the web server; the heavy torch dependencies stay optional; to cancel
+  a job, the main process stops the worker.
+- Config `tts.worker_python` is the path of the Python interpreter for the
+  worker. Empty means the same interpreter.
+- Put torch, qwen-tts, and soundfile in the optional dependency group `tts` of
+  `pyproject.toml` (`uv sync --extra tts`). Detect the GPU with `nvidia-smi`.
+  Choose the matching PyTorch build.
+- If the package `flash_attn` is installed, use `attn_implementation="flash_attention_2"`.
+  If not, use the default of transformers. Load the model with bfloat16 on the GPU.
+
+### 9.2 Worker protocol
+
+- Input: `units.jsonl`. One JSON object per line with the keys `id`, `text`,
+  `language`, `hash`. (In this repo the stage directory is `05_speak/`.)
+- Output: `units/<hash>.wav`. Skip each unit whose file already exists.
+- Progress: write one JSON line to stdout for each finished unit, for example
+  `{"done": 12, "total": 340}`. For an error, write a JSON line with the key
+  `error`. Exit code 0 means success.
+- The main process reads these lines, updates the job progress, and stops the
+  worker on cancel.
+- On CUDA out-of-memory: free the cache, halve the batch size, and try again. If
+  it fails again, stop with a clear message.
+
+### 9.3 Model API
+
+Verified against https://github.com/QwenLM/Qwen3-TTS README (2026-11-21):
+
+- `Qwen3TTSModel.from_pretrained(model_id, device_map=..., dtype=torch.bfloat16, attn_implementation=...)`
+- `generate_custom_voice(text, language, speaker, instruct)` returns `(wavs, sample_rate)`.
+- `get_supported_speakers()` and `get_supported_languages()` list what the model supports.
+- The generate functions accept lists for batch input.
+- Voice clone (Base model): `generate_voice_clone(text, language, ref_audio, ref_text)`;
+  to reuse one voice across units, build the prompt once per job with
+  `create_voice_clone_prompt(ref_audio, ref_text)` and pass it as `voice_clone_prompt`.
+
+Modes:
+
+- `clone`: Base model. Needs `reference_audio` and, if the API needs it, `reference_text`.
+- `custom_voice`: CustomVoice model. Needs `speaker`. `instruct` is optional.
+- Do not build `voice_design` now.
+
+The reference clip must be at least 3 seconds long. Put it in `voices/`. Add
+`voices/` and `models/` to `.gitignore`.
+
+### 9.4 Model files and commands
+
+- `haldio tts-pull`: downloads the model weights once (`huggingface_hub`) to
+  `tts.model_path` or to `models/`. After that, the worker runs with
+  `HF_HUB_OFFLINE=1`. `tts.model_id` can be a Hugging Face id or a local folder path.
+- `haldio tts-check`: starts the worker, loads the model, prints the speakers
+  and languages, and writes `tts-check.wav` from one sentence in the selected
+  language. The button "Test TTS" in the web UI calls the same code.
+- Unit size: keep `max_chars_per_unit`. Test 250 and 400 characters with a German
+  paragraph. Write the result in `docs/decisions/`.
+
+### 9.5 Stage S8 and the hooks
+
+- S8 starts the worker, waits for it, and the worker exits at the end of the stage.
+- The hooks are per stage: `before_edit`, `after_edit`, `before_speak`, `after_speak`.
+- Example for `before_speak`: `lms unload --all` (verified: the command exists).
+- The rule stays: LLM stages and the TTS stage never run at the same time.
+
+### 9.6 Unchanged rules from the original section 9
+
+- Keep two texts. `script_text` is the faithful, human-readable script.
+  `tts_text` is derived from it by code, only for the TTS input: convert the
+  remaining digit strings to words (`num2words`), make identifiers speakable,
+  and apply the optional lexicon `pronunciations.yaml`. Never write these
+  changes into `script_text`. Test each rule with unit tests. After tests with
+  Qwen3-TTS, you can drop the digit rule if the model reads digits well.
+- Split `tts_text` into units at sentence ends. Maximum characters per unit:
+  config value. If a sentence is too long, cut it at a comma.
+- Cache each audio unit by hash. After a crash, resume from the cache.
 
 ## 10. Web interface
 
@@ -299,10 +386,20 @@ llm:
   timeout_s: 600
   strip_thinking: true
 tts:
-  backend: mock          # mock | qwen3
-  voice: ""
+  backend: mock           # mock | qwen_local
+  mode: clone             # clone | custom_voice
+  model_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+  model_path: ""          # optional local folder
+  worker_python: ""       # empty = same interpreter
+  device: auto            # auto | cuda:0 | cpu
+  dtype: bfloat16
   language: auto
+  speaker: ""             # custom_voice only
+  instruct: ""            # custom_voice only
+  reference_audio: ""     # clone only, file in voices/
+  reference_text: ""      # clone only, if the API needs it
   max_chars_per_unit: 400
+  batch_size: 1
 editor:
   prompt_version: v1
   fidelity_check: true
@@ -318,8 +415,10 @@ audio:
 paths:
   data_dir: ./data
 hooks:
-  before_stage_command: ""
-  after_stage_command: ""
+  before_edit: ""
+  after_edit: ""
+  before_speak: ""
+  after_speak: ""
 server:
   host: 127.0.0.1
   port: 8080
@@ -334,6 +433,7 @@ server:
 - Mark tests that need the real LM Studio with `-m live`. Skip them by default.
 - Build an editor eval set: `tests/eval/editor_cases.yaml` with about 15 short cases (table, list, reference, formula, units, footnote, code, protected terms, a prompt-injection text inside the source). Add `scripts/eval_editor.py`. It runs the cases against the live LM Studio and prints pass or fail for each rule.
 - Use `ruff` for lint and format. Add a GitHub Actions workflow that runs lint and the tests (without `live` tests).
+- Corrected by Correction 1: test the worker protocol with a fake worker script that needs no GPU. Cover progress lines, resume, cancel, and an error line. Mark tests that need the real model with `-m live_tts` and skip them by default. The CI workflow must not install torch.
 
 ## 14. Security
 
@@ -345,19 +445,19 @@ server:
 
 ## 15. Out of scope for version 1
 
-Translation, OCR for scanned PDFs, other input formats (EPUB, DOCX), image understanding with vision models, voice cloning, user accounts, cloud deployment. Keep the extractor interface open, so that I can add input formats later.
+Translation, OCR for scanned PDFs, other input formats (EPUB, DOCX), image understanding with vision models, voice design, user accounts, cloud deployment. Keep the extractor interface open, so that I can add input formats later. Corrected by Correction 1: also out of scope is TTS through LM Studio, llama.cpp, or GGUF — the `TTSBackend` interface lets us add such a backend later.
 
 ## 16. Milestones
 
 **M0 Foundation.** Ask the questions (section 17). Create the folder, `git init`, and the GitHub repo. Add `docs/BRIEF.md`, `docs/PROGRESS.md`, `AGENTS.md`, and `docs/PLAN.md` (architecture and decisions). Study the reference repo. Add the project skeleton: `pyproject.toml`, `ruff`, `pytest`, CI, config loading. **Stop. Show me `docs/PLAN.md` and `docs/reference-notes.md`. Wait for my OK.**
 
-**M1 Extract.** S1 and S2, the document model, `hoerbuch inspect`, and tests with synthetic PDFs.
+**M1 Extract.** S1 and S2, the document model, `haldio inspect`, and tests with synthetic PDFs.
 
-**M2 Editor.** LLM client for LM Studio, S3 to S7, the QA report, and the eval set. CLI: `hoerbuch script <pdf> -o <dir>` makes `script.md` and the QA report. **Stop. I read the script quality with a real PDF. Wait for my OK.**
+**M2 Editor.** LLM client for LM Studio, S3 to S7, the QA report, and the eval set. CLI: `haldio script <pdf> -o <dir>` makes `script.md` and the QA report. **Stop. I read the script quality with a real PDF. Wait for my OK.**
 
-**M3 Speech.** TTS adapter, mock backend, normalizer, S8 and S9. CLI: `hoerbuch run <pdf>` makes the audiobook end to end. Use the mock backend until I confirm Qwen3-TTS. Then add `QwenTTSBackend`. **Stop. I listen to a sample. Wait for my OK.**
+**M3 Speech.** TTS adapter, mock backend, normalizer, S8 and S9. CLI: `haldio run <pdf>` makes the audiobook end to end. Use the mock backend until I confirm Qwen3-TTS. Then add `QwenTTSBackend`. **Stop. I listen to a sample. Wait for my OK.**
 
-**M4 Jobs and web UI.**  job index, worker with resume and cancel, library page, job page, downloads, delete. CLI: `hoerbuch serve`.
+**M4 Jobs and web UI.**  job index, worker with resume and cancel, library page, job page, downloads, delete. CLI: `haldio serve`.
 
 **M5 Polish.** Review page, settings page with connection tests, clear error messages, README (install, run, config, screenshots), clean-clone test of the setup instructions.
 
@@ -372,7 +472,7 @@ Definition of done for each milestone: tests pass, `ruff` is clean, `docs/PROGRE
    2. GitHub prinzalx, repo name (default: `Haldio`), and visibility (default: public).
    3. Repo license (default: none until I decide). Mention the PyMuPDF AGPL point.
    4. LLM - bubo @ http://127.0.0.1:8080/v1
-   5. Qwen3-TTS: how do I call it (HTTP endpoint, Python package, or CLI)? Which voices and languages? Maximum text length per call? Output sample rate?
+   5. Corrected by Correction 1 (asked 2026-11-21, answered): GPU and VRAM — detected: no NVIDIA GPU, AMD Radeon 8060S, no CUDA → user chose the ROCm/HIP PyTorch build. First test mode — `custom_voice`. Reference clip — given later. Test text language — German.
    6. Hardware: GPU and VRAM, RAM. (Decides if the unload hooks are needed.)
    7. Default output language (default: same as the source) and default output formats (default: MP3 and OGG).
 4. Wait for my answers. Then start with M0.

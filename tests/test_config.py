@@ -23,8 +23,8 @@ def test_missing_file_keeps_defaults(tmp_path: Path) -> None:
 
 def test_partial_yaml_overrides_only_given_keys(tmp_path: Path) -> None:
     path = tmp_path / "config.yaml"
-    path.write_text("server:\n  port: 9000\ntts:\n  backend: qwen3\n", encoding="utf-8")
+    path.write_text("server:\n  port: 9000\ntts:\n  backend: qwen_local\n", encoding="utf-8")
     cfg = load_config(path)
     assert cfg.server.port == 9000
-    assert cfg.tts.backend == "qwen3"
+    assert cfg.tts.backend == "qwen_local"
     assert cfg.server.host == "127.0.0.1"

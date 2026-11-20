@@ -7,7 +7,7 @@ computer; no document data leaves it. Read `docs/BRIEF.md` at the start of each 
 
 ```
 uv sync --extra dev          # install (creates .venv)
-uv run hoerbuch --version    # CLI
+uv run haldio --version    # CLI
 uv run pytest                # tests (skips -m live)
 uv run pytest -m live        # tests that need a real LM Studio / TTS server
 uv run ruff check src tests  # lint

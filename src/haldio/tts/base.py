@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -51,6 +53,27 @@ class TTSBackend(ABC):
     @abstractmethod
     def list_voices(self) -> list[Voice]:
         """List all available voices."""
+
+    def synthesize_batch(
+        self,
+        items: list[tuple[str, Path]],
+        language: str,
+        params: TTSParams,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> list[float]:
+        """Synthesize all pending (text, target-path) items and write the WAV files.
+
+        Returns one duration in seconds per item. The default loops over
+        synthesize(); worker backends override this with a single batch run.
+        """
+        durations: list[float] = []
+        for index, (text, path) in enumerate(items, start=1):
+            audio = self.synthesize(text, language, params)
+            path.write_bytes(audio.data)
+            durations.append(audio.duration_seconds)
+            if progress:
+                progress(index, len(items))
+        return durations
 
     def healthcheck(self) -> tuple[bool, str]:
         """Return (ok, message) for the settings page."""

@@ -22,14 +22,15 @@ that stage gets most of the effort.
 | ffmpeg/ffprobe | **not on PATH** | user installs them; path stays configurable |
 | git / gh | 2.55.0 / 2.102.0, logged in as `prinzalx` | repo creation via gh |
 | Editor LLM | `bubo` at `http://127.0.0.1:8080/v1`, 200k ctx, text+image | LM Studio style, `/v1/models` works |
-| TTS | Qwen3-TTS, HTTP endpoint at `http://127.0.0.1:1234/v1` | HTTP adapter; not running today |
+| TTS | Qwen3-TTS runs **inside our tool** (Correction 1): `qwen-tts` package in a worker subprocess | HTTP adapter removed |
 | Web UI port | **8505** | 8080 is taken by the LLM |
 | GPU / RAM | AMD Radeon 8060S (Strix Halo, shared VRAM), 31.6 GB RAM | unload hooks are worth keeping |
 
 ## 3. Pipeline
 
 Stages run in strict order. Each stage reads files and writes files, so any stage can
-re-run alone. `before_stage_command` / `after_stage_command` let the user unload a model
+re-run alone. The hooks `before_edit` / `after_edit` / `before_speak` /
+`after_speak` (Correction 1) let the user unload a model
 between stages.
 
 | Stage | Output | Notes |
@@ -41,7 +42,7 @@ between stages.
 | S5 Edit | `03_edit/chunks/*.out.json` | editor LLM, save each result at once |
 | S6 Verify | `03_edit/qa.json` | automatic checks + fidelity call, max 2 retries |
 | S7 Assemble | `04_script/script.md`, `script.json` | optional `awaiting_review` stop |
-| S8 Speak | `05_tts/units/*.wav` | TTS per unit, cached by hash |
+| S8 Speak | `05_speak/units/*.wav` | Qwen3-TTS worker subprocess, cached by hash |
 | S9 Master | `06_output/*` | ffmpeg joins, loudness, MP3/OGG, tags, chapters |
 
 Cache key of an editor result: hash of (input, prompt version, model id, parameters).
@@ -62,11 +63,12 @@ Cache key of an audio unit: hash of (text, voice, language, parameters).
 ```
 src/haldio/
   config.py        # config.yaml + .env, pydantic models
-  cli.py           # hoerbuch inspect | script | run | serve
+  cli.py           # haldio inspect | script | run | serve
   pipeline/        # s1_ingest.py ... s9_master.py, one module per stage
   extract/         # Extractor interface, PyMuPDF implementation
   llm/             # LM Studio client, editor prompt builder, JSON schema
-  tts/             # TTSBackend interface, MockTTSBackend, QwenTTSBackend
+  tts/             # TTSBackend interface, MockTTSBackend, QwenLocalBackend
+  tts_worker.py    # worker subprocess: loads torch + Qwen3-TTS, JSON-line protocol
   audio/           # ffmpeg assembly, normalisation, export
   web/             # FastAPI app, Jinja2 templates, HTMX
   jobs/            # job index on disk, worker queue
@@ -86,13 +88,15 @@ Rule: every source file stays under 400 lines.
 4. **Web server binds 127.0.0.1** on port 8505 (brief section 14 wins over the "0.0.0.0"
    line in section 5; the user confirmed a non-8080 port).
 5. **CLI framework argparse** for now — no extra dependency until it is really needed.
-6. **Package `haldio`, command `hoerbuch`.**
+6. **Package `haldio`, command `haldio`.**
 
 ## 7. Risks and open points
 
 - PyMuPDF wheels on Python 3.14: verify at first `uv sync` with the extraction deps (M1).
-- Qwen3-TTS HTTP details are unknown until it runs: voices, max text length per call,
-  output sample rate. MockTTS covers the pipeline until then.
+- Qwen3-TTS runs locally via the `qwen-tts` package (Correction 1). torch is
+  not installed in the main environment; the worker uses its own interpreter
+  (`tts.worker_python`). Voices and sample rate are read from the model at run
+  time, never hard-coded. MockTTS covers the pipeline until the model is pulled.
 - ffmpeg is not installed yet; nothing audio-related can run before the user installs it.
 - The reference repo study will tell us whether it is modular enough to borrow from.
 

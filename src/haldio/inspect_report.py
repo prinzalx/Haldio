@@ -1,4 +1,4 @@
-"""Text report for `hoerbuch inspect` (brief section 7)."""
+"""Text report for `haldio inspect` (brief section 7)."""
 
 from __future__ import annotations
 

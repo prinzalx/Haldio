@@ -74,6 +74,17 @@ def _write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _run_hook(name: str, command: str) -> None:
+    """Optional shell hook around a stage (e.g. 'lms unload --all')."""
+    if not command.strip():
+        return
+    import subprocess
+
+    done = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if done.returncode != 0:
+        print(f"hook {name} failed ({done.returncode}): {done.stderr.strip()[:200]}")
+
+
 def edit_chunk_with_retry(
     chunk: dict[str, Any],
     client: LlmClient,
@@ -141,6 +152,7 @@ def run_script(
     edits: list[ChunkEdit] = []
     qa: list[ChunkQA] = []
     previous_tail = ""
+    _run_hook("before_edit", config.hooks.before_edit)
     try:
         for index, chunk in enumerate(chunks):
             report("editing", 10 + int(50 * index / max(1, len(chunks))))
@@ -163,6 +175,7 @@ def run_script(
     finally:
         if client_factory is None:
             client.close()
+    _run_hook("after_edit", config.hooks.after_edit)
 
     _write_json(out_dir / "03_edit" / "qa.json", [asdict(c) for c in qa])
     script_md, data = assemble_script(edits)
@@ -227,6 +240,7 @@ def run_book(
 
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
+    _run_hook("before_speak", config.hooks.before_speak)
     backend = (backend_factory or create_backend)(config.tts)
     try:
         spoken = synthesize_script(
@@ -237,9 +251,11 @@ def run_book(
             out_dir,
             script.language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
+            progress=lambda done, total: report("speaking", 65 + int(20 * done / max(1, total))),
         )
     finally:
         backend.close()
+    _run_hook("after_speak", config.hooks.after_speak)
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
 
@@ -266,6 +282,7 @@ def run_speech(
     script = ScriptResult(out_dir=out_dir, chunks=0, language=language)
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
+    _run_hook("before_speak", config.hooks.before_speak)
     backend = (backend_factory or create_backend)(config.tts)
     try:
         spoken = synthesize_script(
@@ -276,9 +293,11 @@ def run_speech(
             out_dir,
             language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
+            progress=lambda done, total: report("speaking", 65 + int(20 * done / max(1, total))),
         )
     finally:
         backend.close()
+    _run_hook("after_speak", config.hooks.after_speak)
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
     report("mastering", 90)

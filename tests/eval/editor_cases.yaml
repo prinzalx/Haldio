@@ -35,7 +35,7 @@
   max_length_ratio: 4.0
 
 - name: code-omitted
-  source: '[{"type": "code", "text": "hoerbuch run buch.pdf"}]'
+  source: '[{"type": "code", "text": "haldio run buch.pdf"}]'
   must_not_contain: ["```"]
 
 - name: protected-camelcase

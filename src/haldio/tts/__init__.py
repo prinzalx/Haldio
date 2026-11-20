@@ -3,12 +3,12 @@
 from haldio.config import TtsConfig
 from haldio.tts.base import AudioResult, TTSBackend, TTSParams, Voice
 from haldio.tts.mock import MockTTSBackend
-from haldio.tts.qwen3 import QwenTTSBackend
+from haldio.tts.qwen_local import QwenLocalBackend
 
 __all__ = [
     "AudioResult",
     "MockTTSBackend",
-    "QwenTTSBackend",
+    "QwenLocalBackend",
     "TTSBackend",
     "TTSParams",
     "Voice",
@@ -18,6 +18,6 @@ __all__ = [
 
 def create_backend(config: TtsConfig) -> TTSBackend:
     """Build the configured TTS backend."""
-    if config.backend == "qwen3":
-        return QwenTTSBackend(config)
+    if config.backend == "qwen_local":
+        return QwenLocalBackend(config)
     return MockTTSBackend()

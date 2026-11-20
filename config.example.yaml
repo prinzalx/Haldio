@@ -9,13 +9,20 @@ llm:
   timeout_s: 600
   strip_thinking: true
 tts:
-  backend: mock          # mock | qwen3
-  base_url: http://127.0.0.1:1234/v1
-  api_key: ""
-  model: qwen3-tts
-  voice: ""
+  backend: mock          # mock | qwen_local
+  mode: clone            # clone | custom_voice
+  model_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+  model_path: ""         # optional local folder
+  worker_python: ""      # empty = same interpreter
+  device: auto           # auto | cuda:0 | cpu
+  dtype: bfloat16
   language: auto
+  speaker: ""            # custom_voice only
+  instruct: ""           # custom_voice only
+  reference_audio: ""    # clone only, file in voices/
+  reference_text: ""     # clone only, if the API needs it
   max_chars_per_unit: 400
+  batch_size: 1
 editor:
   prompt_version: v1
   fidelity_check: true
@@ -38,8 +45,10 @@ audio:
 paths:
   data_dir: ./data
 hooks:
-  before_stage_command: ""
-  after_stage_command: ""
+  before_edit: ""
+  after_edit: ""
+  before_speak: ""       # e.g. lms unload --all
+  after_speak: ""
 server:
   host: 127.0.0.1
   port: 8505             # 8080 is used by the LLM on this machine

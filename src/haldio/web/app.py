@@ -141,16 +141,30 @@ def create_app(
     @app.get("/settings/test-tts", response_class=HTMLResponse)
     def test_tts() -> HTMLResponse:
         from haldio.tts import create_backend
+        from haldio.tts.qwen_local import QwenLocalBackend
 
         backend = create_backend(config.tts)
         try:
-            ok, message = backend.healthcheck()
-            if ok:
-                names = ", ".join(v.name or v.id for v in backend.list_voices()[:10])
-                message = f"TTS ok: {names or 'keine Stimmen'}"
+            if isinstance(backend, QwenLocalBackend):
+                try:
+                    result = backend.check(
+                        "Guten Tag. Dies ist ein Test der Sprachausgabe.",
+                        Path("data") / "tts-check.wav",
+                    )
+                    voices = ", ".join(str(s) for s in result["speakers"][:10])
+                    text = f"TTS ok: Stimmen {voices or 'keine'}"
+                except Exception as error:  # noqa: BLE001 - show any worker error in the UI
+                    text = f"Fehler: {error}"
+            else:
+                ok, message = backend.healthcheck()
+                if ok:
+                    names = ", ".join(v.name or v.id for v in backend.list_voices()[:10])
+                    text = f"TTS ok: {names or 'keine Stimmen'}"
+                else:
+                    text = f"Fehler: {message}"
         finally:
             backend.close()
-        return HTMLResponse(f"<span>{message}</span>")
+        return HTMLResponse(f"<span>{text}</span>")
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str) -> RedirectResponse:

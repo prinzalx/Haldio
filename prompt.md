@@ -79,7 +79,7 @@ Cache key of an editor result: hash of (input, prompt version, model id, paramet
 
 Start with PyMuPDF and `pymupdf4llm` behind an `Extractor` interface. If the table results are bad, evaluate Docling as an alternative. Note: PyMuPDF has the AGPL license. Record this in `docs/decisions/` and tell me.
 
-Add the CLI command `hoerbuch inspect <pdf>`. It prints the outline, the block counts, the tables, and the cross-references, so that I can check the structure.
+Add the CLI command `haldio inspect <pdf>`. It prints the outline, the block counts, the tables, and the cross-references, so that I can check the structure.
 
 **S3 Plan.** Build `doc_map.json`. Use code first and the LLM second.
 
@@ -351,13 +351,13 @@ Translation, OCR for scanned PDFs, other input formats (EPUB, DOCX), image under
 
 **M0 Foundation.** Ask the questions (section 17). Create the folder, `git init`, and the GitHub repo. Add `docs/BRIEF.md`, `docs/PROGRESS.md`, `AGENTS.md`, and `docs/PLAN.md` (architecture and decisions). Study the reference repo. Add the project skeleton: `pyproject.toml`, `ruff`, `pytest`, CI, config loading. **Stop. Show me `docs/PLAN.md` and `docs/reference-notes.md`. Wait for my OK.**
 
-**M1 Extract.** S1 and S2, the document model, `hoerbuch inspect`, and tests with synthetic PDFs.
+**M1 Extract.** S1 and S2, the document model, `haldio inspect`, and tests with synthetic PDFs.
 
-**M2 Editor.** LLM client for LM Studio, S3 to S7, the QA report, and the eval set. CLI: `hoerbuch script <pdf> -o <dir>` makes `script.md` and the QA report. **Stop. I read the script quality with a real PDF. Wait for my OK.**
+**M2 Editor.** LLM client for LM Studio, S3 to S7, the QA report, and the eval set. CLI: `haldio script <pdf> -o <dir>` makes `script.md` and the QA report. **Stop. I read the script quality with a real PDF. Wait for my OK.**
 
-**M3 Speech.** TTS adapter, mock backend, normalizer, S8 and S9. CLI: `hoerbuch run <pdf>` makes the audiobook end to end. Use the mock backend until I confirm Qwen3-TTS. Then add `QwenTTSBackend`. **Stop. I listen to a sample. Wait for my OK.**
+**M3 Speech.** TTS adapter, mock backend, normalizer, S8 and S9. CLI: `haldio run <pdf>` makes the audiobook end to end. Use the mock backend until I confirm Qwen3-TTS. Then add `QwenTTSBackend`. **Stop. I listen to a sample. Wait for my OK.**
 
-**M4 Jobs and web UI.**  job index, worker with resume and cancel, library page, job page, downloads, delete. CLI: `hoerbuch serve`.
+**M4 Jobs and web UI.**  job index, worker with resume and cancel, library page, job page, downloads, delete. CLI: `haldio serve`.
 
 **M5 Polish.** Review page, settings page with connection tests, clear error messages, README (install, run, config, screenshots), clean-clone test of the setup instructions.
 

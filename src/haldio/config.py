@@ -23,15 +23,22 @@ class LlmConfig(BaseModel):
 
 
 class TtsConfig(BaseModel):
-    """Speech synthesis backend."""
+    """Local Qwen3-TTS backend (worker subprocess) or mock."""
 
-    backend: Literal["mock", "qwen3"] = "mock"
-    base_url: str = "http://127.0.0.1:1234/v1"
-    api_key: str = ""
-    model: str = "qwen3-tts"
-    voice: str = ""
+    backend: Literal["mock", "qwen_local"] = "mock"
+    mode: Literal["clone", "custom_voice"] = "clone"
+    model_id: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+    model_path: str = ""
+    worker_python: str = ""
+    device: str = "auto"
+    dtype: str = "bfloat16"
     language: str = "auto"
+    speaker: str = ""
+    instruct: str = ""
+    reference_audio: str = ""
+    reference_text: str = ""
     max_chars_per_unit: int = 400
+    batch_size: int = 1
 
 
 class EditorConfig(BaseModel):
@@ -68,10 +75,12 @@ class PathsConfig(BaseModel):
 
 
 class HooksConfig(BaseModel):
-    """Optional shell commands around each stage (model unload)."""
+    """Optional shell commands around the LLM and TTS stages (model unload)."""
 
-    before_stage_command: str = ""
-    after_stage_command: str = ""
+    before_edit: str = ""
+    after_edit: str = ""
+    before_speak: str = ""
+    after_speak: str = ""
 
 
 class ServerConfig(BaseModel):

@@ -26,7 +26,8 @@ Document data does not leave your machine.
 
 - [uv](https://docs.astral.sh/uv/) and Python 3.11+
 - `ffmpeg` and `ffprobe` on the PATH (for stage S9)
-- A local OpenAI-compatible LLM server (editor) and TTS server (speaker)
+- A local OpenAI-compatible LLM server (editor). The speaker (Qwen3-TTS) runs
+  inside this tool — see "TTS setup".
 
 ## Install
 
@@ -36,22 +37,45 @@ copy config.example.yaml config.yaml   # Windows; cp on Linux/macOS
 ```
 
 Edit `config.yaml`: the LLM URL/model (default `http://127.0.0.1:8080/v1`, model
-`bubo`) and the TTS URL (default `http://127.0.0.1:1234/v1`). Secrets go to `.env`.
+`bubo`) and the TTS settings (see "TTS setup"). Secrets go to `.env`.
 
 ## Run
 
 ```
-uv run hoerbuch inspect <pdf>              # show the extracted structure
-uv run hoerbuch script <pdf> -o <dir>      # S1-S7: script.md + QA report
-uv run hoerbuch run <pdf> -o <dir>         # S1-S9: full audiobook
-uv run hoerbuch serve                      # web interface on port 8505
+uv run haldio inspect <pdf>              # show the extracted structure
+uv run haldio script <pdf> -o <dir>      # S1-S7: script.md + QA report
+uv run haldio run <pdf> -o <dir>         # S1-S9: full audiobook
+uv run haldio serve                      # web interface on port 8505
 ```
 
 Open http://127.0.0.1:8505 (German user interface): upload a PDF, watch the job,
 listen to and download the result. The settings page can test both servers.
 
-TTS backends: `mock` (silent test audio, no server needed) and `qwen3`
-(OpenAI-compatible `/audio/speech`). Set `tts.backend` in `config.yaml`.
+TTS backends: `mock` (silent test audio, no model needed) and `qwen_local`
+(the tool runs Qwen3-TTS itself in a worker subprocess). Set `tts.backend` in
+`config.yaml`.
+
+## TTS setup
+
+```
+uv venv .venv-tts --python 3.12
+uv pip install --python .venv-tts "qwen-tts>=0.1" soundfile huggingface_hub
+uv pip install --python .venv-tts torch --index-url https://download.pytorch.org/whl/rocm6.4
+```
+
+In `config.yaml` set `tts.backend: qwen_local`, the chosen `tts.model_id`
+(for example `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`), `tts.mode`, and
+`tts.worker_python: .venv-tts\Scripts\python.exe`. Then:
+
+```
+uv run haldio tts-pull    # download the model weights once (Hugging Face)
+uv run haldio tts-check   # load the model, print voices, write tts-check.wav
+```
+
+After `tts-pull` the worker runs offline (`HF_HUB_OFFLINE=1`). Mode `clone`
+(Base model) needs a reference clip of at least 3 seconds in `voices/`; mode
+`custom_voice` (CustomVoice model) uses preset voices. The web settings page
+has the same check behind the "Test TTS" button.
 
 ## Test and lint
 
@@ -66,11 +90,6 @@ The editor prompt has its own eval set:
 ```
 uv run python scripts/eval_editor.py
 ```
-
-## Status
-
-Milestones M0–M5 complete (release candidate). See `docs/PROGRESS.md` for details
-and `docs/BRIEF.md` for the full project brief.
 
 ## License
 

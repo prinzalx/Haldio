@@ -8,7 +8,7 @@
         <td><button hx-get="/settings/test-llm" hx-target="#llm-test">Test LM Studio</button>
         <span id="llm-test"></span></td></tr>
     <tr><th>TTS (Sprecher)</th>
-        <td>{{ config.tts.base_url }} · Backend {{ config.tts.backend }} · Stimme {{ config.tts.voice or "(Standard)" }}</td>
+        <td>{{ config.tts.model_id }} · Backend {{ config.tts.backend }} · Modus {{ config.tts.mode }} · Stimme {{ config.tts.speaker or "(Standard)" }}</td>
         <td><button hx-get="/settings/test-tts" hx-target="#tts-test">Test TTS</button>
         <span id="tts-test"></span></td></tr>
     <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>

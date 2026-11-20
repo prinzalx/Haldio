@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,27 +61,20 @@ def synthesize_script(
     out_dir: Path,
     language: str,
     pronunciations: dict[str, str] | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> SpeakResult:
     """Synthesize every script block in order; write 05_speak/units.json + WAV files."""
     units_dir = out_dir / "05_speak" / "units"
     units_dir.mkdir(parents=True, exist_ok=True)
     result = SpeakResult()
-    params = TTSParams(voice=tts_config.voice)
+    params = TTSParams(voice=tts_config.speaker)
+    pending: list[tuple[str, Path]] = []
     for chunk in script_data.get("chunks", []):
         for block in chunk.get("blocks", []):
             spoken = make_speakable(block.get("text", ""), language, pronunciations)
             for piece in split_units(spoken, tts_config.max_chars_per_unit):
-                key = unit_cache_key(piece, tts_config.voice, backend_name)
+                key = unit_cache_key(piece, tts_config.speaker, backend_name)
                 path = units_dir / f"{key}.wav"
-                if path.is_file():
-                    result.cached += 1
-                    duration = 0.0
-                else:
-                    audio = backend.synthesize(piece, language, params)
-                    path.write_bytes(audio.data)
-                    duration = audio.duration_seconds
-                    result.synthesized += 1
-                result.total_seconds += duration
                 result.units.append(
                     {
                         "file": str(path.relative_to(out_dir)),
@@ -90,9 +84,17 @@ def synthesize_script(
                         "text": piece,
                     }
                 )
+                if path.is_file():
+                    result.cached += 1
+                else:
+                    pending.append((piece, path))
     if not result.units:
         result.error = "no speakable units in script"
         return result
+    if pending:
+        durations = backend.synthesize_batch(pending, language, params, progress)
+        result.synthesized = len(pending)
+        result.total_seconds = sum(durations)
     (out_dir / "05_speak" / "units.json").write_text(
         json.dumps({"units": result.units}, ensure_ascii=False, indent=2), encoding="utf-8"
     )

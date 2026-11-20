@@ -30,6 +30,9 @@ data/
 *.safetensors
 *.bin
 *.onnx
+models/
+voices/
+.venv-tts/
 
 # OS / editor
 .DS_Store
