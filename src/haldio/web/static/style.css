@@ -52,3 +52,11 @@ textarea {
 }
 .chunk.warn { border-left: 3px solid #b98a2f; padding-left: 8px; margin: 8px 0; }
 code { background: #101418; padding: 1px 4px; border-radius: 4px; }
+.logtail { margin: 8px 0; }
+.logtail summary { color: #8a939c; cursor: pointer; font-size: 12px; }
+.logtail pre {
+  margin: 4px 0 0; padding: 6px 8px; max-height: 170px; overflow-y: auto;
+  background: #101418; border: 1px solid #2c343d; border-radius: 6px;
+  font-family: Consolas, monospace; font-size: 12px; line-height: 1.45;
+  white-space: pre-wrap;
+}

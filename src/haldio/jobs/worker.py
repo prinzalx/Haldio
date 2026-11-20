@@ -110,6 +110,8 @@ class Worker:
         job = self.index.get(job_id)
         if job is None or job.status == "cancelled":
             return
+        # an old cancel flag must not kill a job the user resumed
+        self._cancelled.discard(job_id)
         # re-seed the in-memory tail so a restart keeps the last log lines
         self._job_logs[job_id] = deque(job.logs[-_LOG_TAIL:], maxlen=_LOG_TAIL)
 

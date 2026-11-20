@@ -144,6 +144,68 @@ def test_job_api_exposes_logs(app_parts) -> None:
     assert any("editing 30%" in line for line in body["logs"])
 
 
+def test_job_page_shows_log_tail(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    page = client.get(location)
+    assert "Protokoll" in page.text
+    assert "editing 30%" in page.text
+
+
+def test_failed_job_offers_resume_and_restart(app_parts, monkeypatch) -> None:
+    app, index, _calls = app_parts
+    monkeypatch.setattr(
+        "haldio.jobs.worker.run_speech",
+        lambda folder, cfg, language, **kwargs: _fake_result(folder),
+    )
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.list()[0]
+    script = index.jobs_dir / job.id / "04_script" / "script.json"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text('{"chunks": []}', encoding="utf-8")
+    job.status = "failed"
+    job.error = "stack expects a non-empty TensorList"
+    index.update(job)
+    page = client.get(location)
+    assert "Weiter — Sprachausgabe" in page.text
+    assert "Neu starten" in page.text
+    response = client.post(f"{location}/speak", follow_redirects=False)
+    assert response.status_code == 303
+    done = index.get(job.id)
+    assert done.status == "done"
+    assert done.error == ""
+
+
+def test_failed_job_without_script_hides_resume(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.list()[0]
+    job.status = "failed"
+    index.update(job)
+    page = client.get(location)
+    assert "Weiter — Sprachausgabe" not in page.text
+    assert "Neu starten" in page.text
+
+
+def test_restart_reruns_full_pipeline(app_parts) -> None:
+    app, index, calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.list()[0]
+    job.status = "failed"
+    job.error = "boom"
+    index.update(job)
+    response = client.post(f"{location}/restart", follow_redirects=False)
+    assert response.status_code == 303
+    assert len(calls) == 2
+    fresh = index.get(job.id)
+    assert fresh.status == "done"
+    assert fresh.error == ""
+
+
 def test_upload_rejects_non_pdf(app_parts) -> None:
     app, _index, _calls = app_parts
     client = TestClient(app)

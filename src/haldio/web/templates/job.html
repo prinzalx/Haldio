@@ -6,9 +6,6 @@
   {% include "partials/job_status.html" %}
   <p class="actions">
     <a href="/jobs/{{ job.id }}/review">📝 Skript prüfen</a>
-    <form method="post" action="/jobs/{{ job.id }}/cancel">
-      <button>Abbrechen</button>
-    </form>
     <form method="post" action="/jobs/{{ job.id }}/delete">
       <button class="danger">🗑 Löschen</button>
     </form>

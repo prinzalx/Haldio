@@ -14,6 +14,34 @@
   </form>
   {% endif %}
   {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}
+  {% if job.status in ("failed", "cancelled") %}
+  <p class="actions">
+    {% if has_script %}
+    <form method="post" action="/jobs/{{ job.id }}/speak">
+      <button>▶ Weiter — Sprachausgabe</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/jobs/{{ job.id }}/restart">
+      <button>↻ Neu starten</button>
+    </form>
+  </p>
+  {% endif %}
+  {% if job.status in ("queued", "extracting", "planning", "editing", "verifying",
+                       "speaking", "mastering", "awaiting_tts") %}
+  <p class="actions">
+    <form method="post" action="/jobs/{{ job.id }}/cancel">
+      <button>■ Abbrechen</button>
+    </form>
+  </p>
+  {% endif %}
+  {% if job.logs %}
+  <details class="logtail"{% if job.status not in ('queued', 'extracting', 'planning',
+       'editing', 'verifying', 'speaking', 'mastering') %} open{% endif %}>
+    <summary>Protokoll (letzte {{ job.logs[-8:] | length }} von {{ job.logs | length }}</summary>
+    <pre>{% for line in job.logs[-8:] %}{{ line }}
+{% endfor %}</pre>
+  </details>
+  {% endif %}
   {% if files %}
   <p>⬇ Downloads:
     {% for f in files %}<a href="/jobs/{{ job.id }}/download/{{ f.name }}">{{ f.name }}</a> {% endfor %}

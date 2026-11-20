@@ -63,7 +63,13 @@ def create_app(
     def job_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request, "job.html", {"job": job, "files": _job_files(job)}
+            request,
+            "job.html",
+            {
+                "job": job,
+                "files": _job_files(job),
+                "has_script": _has_script(app.state.index, job_id),
+            },
         )
 
     @app.get("/api/jobs/{job_id}")
@@ -74,7 +80,13 @@ def create_app(
     def job_status(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request, "partials/job_status.html", {"job": job, "files": _job_files(job)}
+            request,
+            "partials/job_status.html",
+            {
+                "job": job,
+                "files": _job_files(job),
+                "has_script": _has_script(app.state.index, job_id),
+            },
         )
 
     @app.get("/jobs/{job_id}/download/{file_name}")
@@ -117,6 +129,18 @@ def create_app(
     def speak_now(job_id: str) -> RedirectResponse:
         job = _require_job(app.state.index, job_id)
         job.options["resume_from"] = "speaking"
+        job.error = ""
+        app.state.index.update(job)
+        app.state.worker.enqueue(job_id)
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/restart")
+    def restart(job_id: str) -> RedirectResponse:
+        job = _require_job(app.state.index, job_id)
+        job.status = "queued"
+        job.progress = 0
+        job.error = ""
+        job.options.pop("resume_from", None)
         app.state.index.update(job)
         app.state.worker.enqueue(job_id)
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
@@ -216,6 +240,10 @@ def _job_files(job: Job) -> list[dict[str, Any]]:
     if job.status != "done":
         return []
     return [{"name": name, "available": True} for name in _DOWNLOADABLE]
+
+
+def _has_script(index: JobIndex, job_id: str) -> bool:
+    return (index.jobs_dir / job_id / "04_script" / "script.json").is_file()
 
 
 def _load_chunks(script_file: Path) -> list[dict[str, Any]]:
