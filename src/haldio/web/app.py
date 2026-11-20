@@ -145,6 +145,16 @@ def create_app(
         app.state.worker.enqueue(job_id)
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
+    @app.post("/jobs/{job_id}/continue")
+    def continue_job(job_id: str) -> RedirectResponse:
+        job = _require_job(app.state.index, job_id)
+        if job.status == "waiting_for_user" and not app.state.worker.continue_job(job_id):
+            # no open gate (server restarted): queue the job again
+            job.status = "queued"
+            app.state.index.update(job)
+            app.state.worker.enqueue(job_id)
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
     @app.post("/tts-pool/start")
     def start_tts_pool() -> RedirectResponse:
         for job in app.state.index.list():

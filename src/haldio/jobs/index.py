@@ -19,6 +19,7 @@ STATUS_VALUES = (
     "editing",
     "verifying",
     "awaiting_review",
+    "waiting_for_user",
     "speaking",
     "mastering",
     "done",

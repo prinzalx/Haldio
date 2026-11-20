@@ -12,6 +12,7 @@ from typing import Any
 from haldio.config import Config, TtsConfig
 from haldio.extract import PyMuPDFExtractor
 from haldio.llm import LlmClient
+from haldio.llm.client import llm_reachable
 from haldio.pipeline.assemble import assemble_script, write_script
 from haldio.pipeline.chunk import make_chunks
 from haldio.pipeline.edit import (
@@ -83,6 +84,14 @@ def _run_hook(name: str, command: str) -> None:
     done = subprocess.run(command, shell=True, capture_output=True, text=True)
     if done.returncode != 0:
         print(f"hook {name} failed ({done.returncode}): {done.stderr.strip()[:200]}")
+
+
+def _before_speak(config: Config, gate: Callable[[str], None] | None) -> None:
+    """Model swap before S8: run the hook, or wait for the user when it is empty."""
+    if config.hooks.before_speak.strip():
+        _before_speak(config, gate)
+    elif gate:
+        gate("LLM stoppen, dann Weiter drücken.")
 
 
 def edit_chunk_with_retry(
@@ -231,13 +240,17 @@ def run_book(
     progress: Callable[[str, int], None] | None = None,
     stop_after_script: bool = False,
     stop_before_tts: bool = False,
+    gate: Callable[[str], None] | None = None,
 ) -> BookResult:
     """Run S1..S9: PDF in, script, unit audio and master files out.
 
     stop_after_script pauses at the review gate; stop_before_tts pauses in the
     ready2tts pool so the user can free memory before the TTS worker starts.
+    gate(note) blocks the stage until the user presses Continue (manual model swap).
     """
     report = progress or (lambda _stage, _value, _note="": None)
+    if gate and not llm_reachable(config.llm):
+        gate("LLM starten, dann Weiter drücken.")
     script = run_script(pdf_path, config, out_dir, client_factory, progress)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
@@ -248,7 +261,7 @@ def run_book(
 
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
-    _run_hook("before_speak", config.hooks.before_speak)
+    _before_speak(config, gate)
     backend = (backend_factory or create_backend)(config.tts)
     try:
         spoken = synthesize_script(
@@ -286,13 +299,14 @@ def run_speech(
     backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
     pronunciations_path: Path | None = None,
     progress: Callable[..., None] | None = None,
+    gate: Callable[[str], None] | None = None,
 ) -> BookResult:
     """Run only S8 and S9 for a job whose script.json already exists (after review)."""
     report = progress or (lambda *_a: None)
     script = ScriptResult(out_dir=out_dir, chunks=0, language=language)
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
-    _run_hook("before_speak", config.hooks.before_speak)
+    _before_speak(config, gate)
     backend = (backend_factory or create_backend)(config.tts)
     try:
         spoken = synthesize_script(

@@ -36,7 +36,13 @@ def app_parts(tmp_path):
     calls: list[str] = []
 
     def run_fn(
-        pdf_path, cfg, out_dir, progress=None, stop_after_script=False, stop_before_tts=False
+        pdf_path,
+        cfg,
+        out_dir,
+        progress=None,
+        stop_after_script=False,
+        stop_before_tts=False,
+        gate=None,
     ):
         calls.append(str(pdf_path))
         if progress:
@@ -56,7 +62,13 @@ def _gate_app(tmp_path, monkeypatch):
     index = JobIndex(tmp_path / "data")
 
     def run_fn(
-        pdf_path, cfg, out_dir, progress=None, stop_after_script=False, stop_before_tts=False
+        pdf_path,
+        cfg,
+        out_dir,
+        progress=None,
+        stop_after_script=False,
+        stop_before_tts=False,
+        gate=None,
     ):
         if stop_before_tts:
             return BookResult(
@@ -249,6 +261,62 @@ def test_worker_cancel_queued_job(tmp_path) -> None:
         raise AssertionError("must not run")
 
     worker = Worker(index, config, run_fn=never_run, inline=False)
+    worker.cancel(job.id)
+    assert index.get(job.id).status == "cancelled"
+
+
+def _wait_for_status(index: JobIndex, job_id: str, wanted: str) -> str:
+    import time
+
+    for _ in range(100):
+        status = index.get(job_id).status
+        if status == wanted:
+            return status
+        time.sleep(0.05)
+    return index.get(job_id).status
+
+
+def test_gate_blocks_until_continue(tmp_path) -> None:
+    """A non-mock backend pauses in waiting_for_user until the user continues."""
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.tts.backend = "qwencpp"
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf")
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        gate = kwargs.get("gate")
+        if gate:
+            gate("LLM stoppen, dann Weiter drücken.")
+        return _fake_result(out_dir)
+
+    worker = Worker(index, config, run_fn=run_fn, inline=False)
+    worker.start()  # start() re-queues the already-queued job once; do not enqueue again
+    assert _wait_for_status(index, job.id, "waiting_for_user") == "waiting_for_user"
+    assert "LLM stoppen" in index.get(job.id).message
+    assert worker.continue_job(job.id) is True
+    assert _wait_for_status(index, job.id, "done") == "done"
+
+
+def test_continue_route_requeues_without_open_gate(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    _upload_pdf(client)
+    job = index.list()[0]
+    job.status = "waiting_for_user"
+    index.update(job)
+    response = client.post(f"/jobs/{job.id}/continue", follow_redirects=False)
+    assert response.status_code == 303
+    assert index.get(job.id).status == "done"
+
+
+def test_cancel_waiting_for_user(tmp_path) -> None:
+    config = Config()
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf")
+    job.status = "waiting_for_user"
+    index.update(job)
+    worker = Worker(index, config, run_fn=_fake_result, inline=False)
     worker.cancel(job.id)
     assert index.get(job.id).status == "cancelled"
 

@@ -1,5 +1,6 @@
 <div id="job-status"
-     {% if job.status in ('queued', 'extracting', 'planning', 'editing', 'verifying', 'speaking', 'mastering') %}
+     {% if job.status in ('queued', 'extracting', 'planning', 'editing', 'verifying',
+                         'waiting_for_user', 'speaking', 'mastering') %}
      hx-get="/jobs/{{ job.id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"
      {% endif %}>
   <p>
@@ -11,6 +12,11 @@
   <p class="error">🔊 Beginn der TTS: Bitte alle anderen lokalen LLM beenden.</p>
   <form method="post" action="/jobs/{{ job.id }}/speak">
     <button type="submit">OK — Sprachausgabe starten</button>
+  </form>
+  {% endif %}
+  {% if job.status == "waiting_for_user" %}
+  <form method="post" action="/jobs/{{ job.id }}/continue">
+    <button type="submit">▶ Weiter</button>
   </form>
   {% endif %}
   {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}
@@ -27,7 +33,7 @@
   </p>
   {% endif %}
   {% if job.status in ("queued", "extracting", "planning", "editing", "verifying",
-                       "speaking", "mastering", "awaiting_tts") %}
+                       "waiting_for_user", "speaking", "mastering", "awaiting_tts") %}
   <p class="actions">
     <form method="post" action="/jobs/{{ job.id }}/cancel">
       <button>■ Abbrechen</button>

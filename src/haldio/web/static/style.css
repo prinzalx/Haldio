@@ -34,6 +34,7 @@ a { color: #7fb2ff; }
 .badge-failed { background: #8a2f2f; }
 .badge-cancelled { background: #5a5a5a; }
 .badge-editing, .badge-speaking, .badge-mastering, .badge-extracting { background: #274d7a; }
+.badge-waiting_for_user { background: #8a6d1f; }
 button {
   background: #274d7a; color: #fff; border: 0; border-radius: 6px;
   padding: 4px 10px; cursor: pointer;

@@ -18,6 +18,19 @@ class LlmError(RuntimeError):
     """Raised when the LLM cannot be reached or answers with an error."""
 
 
+def llm_reachable(llm: LlmConfig, timeout: float = 3.0) -> bool:
+    """True when LM Studio answers the model list endpoint."""
+    try:
+        response = httpx.get(
+            f"{llm.base_url}/models",
+            headers={"Authorization": f"Bearer {llm.api_key}"},
+            timeout=timeout,
+        )
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
 @dataclass
 class ChatResult:
     """One assistant answer, already cleaned."""

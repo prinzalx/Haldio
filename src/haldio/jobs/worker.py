@@ -40,13 +40,14 @@ class Worker:
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._cancelled: set[str] = set()
+        self._gates: dict[str, threading.Event] = {}
         self._job_logs: dict[str, deque[str]] = {}
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         """Re-queue jobs interrupted by a crash and start the thread."""
         for job in self.index.list():
-            if job.status in _ACTIVE_STATUSES:
+            if job.status in _ACTIVE_STATUSES + ("waiting_for_user",):
                 job.status = "queued"
                 job.message = "erneut eingereiht"
                 self.index.update(job)
@@ -71,13 +72,22 @@ class Worker:
     def cancel(self, job_id: str) -> None:
         self._cancelled.add(job_id)
         job = self.index.get(job_id)
-        if job is not None and job.status in ("queued", "awaiting_tts"):
+        if job is not None and job.status in ("queued", "awaiting_tts", "waiting_for_user"):
             if job.status == "queued":
                 with self._lock:
                     if job_id in self._queue:
                         self._queue.remove(job_id)
             job.status = "cancelled"
             self.index.update(job)
+
+    def continue_job(self, job_id: str) -> bool:
+        """Release a stage that waits in waiting_for_user; False when none is open."""
+        with self._lock:
+            event = self._gates.get(job_id)
+        if event is None:
+            return False
+        event.set()
+        return True
 
     def _log_lines(self, job_id: str) -> deque[str]:
         return self._job_logs.setdefault(job_id, deque(maxlen=_LOG_TAIL))
@@ -125,11 +135,37 @@ class Worker:
             self._log(job, f"{stage} {value}% {note}".strip())
             self.index.update(job)
 
+        def gate(note: str) -> None:
+            """Pause the stage in waiting_for_user until the user presses Continue."""
+            if job_id in self._cancelled:
+                raise _Cancelled()
+            event = threading.Event()
+            with self._lock:
+                self._gates[job_id] = event
+            job.status = "waiting_for_user"
+            job.message = note
+            self._log(job, f"waiting_for_user: {note}")
+            self.index.update(job)
+            while not event.wait(1.0):
+                if job_id in self._cancelled:
+                    break
+            with self._lock:
+                self._gates.pop(job_id, None)
+            if job_id in self._cancelled:
+                raise _Cancelled()
+            job.message = "weiter"
+            self.index.update(job)
+
+        # the mock backend owns no GPU model, so no manual swap gate there
+        wait_gate = gate if self.config.tts.backend != "mock" else None
+
         try:
             folder = self.index.jobs_dir / job_id
             if job.options.get("resume_from") == "speaking":
                 language = job.language if job.language in ("de", "en") else "de"
-                result = run_speech(folder, self.config, language, progress=progress)
+                result = run_speech(
+                    folder, self.config, language, progress=progress, gate=wait_gate
+                )
             else:
                 result = self._run_fn(
                     folder / "source.pdf",
@@ -138,6 +174,7 @@ class Worker:
                     progress=progress,
                     stop_after_script=self.config.editor.review_before_tts,
                     stop_before_tts=self.config.tts.confirm_before_start,
+                    gate=wait_gate,
                 )
             if job_id in self._cancelled:
                 raise _Cancelled()
