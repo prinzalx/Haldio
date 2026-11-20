@@ -15,21 +15,36 @@
   repo `prinzalx/Haldio` public, license AGPL-3.0, web port 8505,
   output = source language + MP3 and OGG.
 
-**Waiting for the user's OK on `docs/PLAN.md` and `docs/reference-notes.md`.**
+## Done — M1 extract (2026-11-20)
 
-## Next — M1 extract
+- `pipeline/ingest.py` (S1): SHA-256, magic-byte check, page count, title/author,
+  text-layer check with a clear stop message; broken PDF handled.
+- `extract/model.py`: `Block`, `CrossReference`, `Document` with `to_dict()` for
+  `document.json`.
+- `extract/pymupdf_extractor.py` + `extract/extractor.py` (S2): line model, running
+  header/footer removal by repetition, page-number removal, column detection by real
+  text gap (no line can be lost), heading levels from the PDF outline or font-size
+  ranking, table cell grid via `find_tables`, list detection and merging, footnote
+  detection by small font near the page bottom, TOC dot-leader detection,
+  cross-reference finding in German and English.
+- `inspect_report.py` + CLI `hoerbuch inspect <pdf>` (`--json` writes document.json).
+- Tests: 23 pass. Synthetic 3-page PDF (`tests/synthetic.py`) with header, footer,
+  headings, list, table, two columns, footnote, formula line, cross-references.
+- Note: `fitz` is deprecated in PyMuPDF 2.1 — use `import pymupdf`. PyMuPDF has wheels
+  for Python 3.14, so no version pin was needed.
 
-1. Add `pymupdf` and `pymupdf4llm` (check wheels for Python 3.14 first).
-2. S1 Ingest: SHA-256, magic-byte check, title/author/page count, text-layer check.
-3. S2 Extract behind an `Extractor` interface: block model in `document.json`,
-   header/footer removal by repetition, hyphenation repair, multi-column reading order,
-   heading levels from outline plus font size/weight, footnote links, cross-references.
-4. CLI `hoerbuch inspect <pdf>` printing outline, block counts, tables, cross-references.
-5. Tests with synthetic PDFs generated in the test (reportlab or fpdf2).
+## Next — M2 editor
+
+1. LM Studio client (`llm/`): chat call, `response_format` json_schema with text
+   fallback, `<think>` stripping, model listing.
+2. S3 Plan: `doc_map.json` — chapter tree, reference index, protected terms, summary.
+3. S4 Chunk: structure-first splitting, max 1500 tokens, per-chunk context.
+4. S5 Edit + S6 Verify + S7 Assemble, QA report.
+5. CLI `hoerbuch script <pdf> -o <dir>`; editor eval set.
 
 ## Open questions
 
-None blocking. Small points for later milestones:
+None blocking.
 
 1. **Qwen3-TTS details** (voices, max characters per call, output sample rate). Default:
    I ask again in M3, before writing `QwenTTSBackend`. MockTTS covers the pipeline until then.
