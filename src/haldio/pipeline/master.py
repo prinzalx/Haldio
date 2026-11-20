@@ -28,7 +28,7 @@ class MasterResult:
 def _silence_wav(path: Path, milliseconds: int, sample_rate: int) -> Path:
     """Write a silent mono 16-bit WAV of the given length."""
     n = int(sample_rate * milliseconds / 1000)
-    with wave.open(path, "wb") as w:
+    with path.open("wb") as handle, wave.open(handle, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(sample_rate)
@@ -45,7 +45,7 @@ def _pause_for(unit: dict[str, Any], pause_ms: dict[str, int]) -> int:
 
 def _ffmpeg_concat(unit_paths: list[Path], merged: Path) -> None:
     list_file = merged.with_name("concat.txt")
-    lines = "".join(f"file '{p.as_posix()}'\n" for p in unit_paths)
+    lines = "".join(f"file '{p.resolve().as_posix()}'\n" for p in unit_paths)
     list_file.write_text(lines, encoding="utf-8")
     subprocess.run(
         [

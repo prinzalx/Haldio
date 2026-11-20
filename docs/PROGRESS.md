@@ -97,11 +97,14 @@
 
 ## Release candidate
 
-Tag `v0.1.0-rc1`, GitHub release created.
+Tag `v0.1.0-rc1`, GitHub release created. Post-RC: ffmpeg installed, master fixed
+(`wave.open` needs `str(path)` on Python 3.14; concat list needs absolute paths)
+and verified — real `book.mp3` / `book.ogg` produced. 62 tests pass.
 
 ## Known limitations
 
-- ffmpeg must be installed by the user (S9 asks politely if it is missing).
+- ffmpeg is installed on the dev machine (winget, 9.1); other users still install
+  it themselves — S9 asks politely if it is missing.
 - The TTS server was not running yet; `qwen3` backend uses the OpenAI-compatible
   `/audio/speech` contract — verify voices when the server is up.
 - Cancel takes effect between chunks/stages, not mid-request.
