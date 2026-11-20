@@ -124,23 +124,29 @@ haldio.tts_worker`), so GPU memory is free when the worker exits.
 
 **Checkpoint:** stop after tts-check writes a WAV; the user listens and gives OK.
 
+Result: `haldio tts-check` ran on the real model (ROCm/HIP), printed the nine voices
+and ten languages, and wrote `tts-check.wav`. The user found the default voice too
+foreign-sounding, listened to one sample per voice, and chose **dylan** (now
+`tts.speaker` in `config.yaml`). A longer German test text followed
+(`tts-check-dylan.wav`). The full run waits: this machine cannot hold the big LLM and
+Qwen3-TTS in memory at the same time, so `hooks.before_speak` is set to
+`lms unload --all` and the full run happens when the user unloads the LLM.
+
 ## Known limitations
 
 - ffmpeg is installed on the dev machine (winget, 9.1); other users still install
   it themselves — S9 asks politely if it is missing.
-- The TTS server was not running yet; `qwen3` backend uses the OpenAI-compatible
-  `/audio/speech` contract — verify voices when the server is up.
+- The big editor LLM and the local TTS worker do not fit into RAM at the same time
+  on this machine; `hooks.before_speak` (`lms unload --all`) frees memory before S8.
 - Cancel takes effect between chunks/stages, not mid-request.
 - Screenshots in the README need the running UI (skipped in headless tests).
 
 ## Next
 
+- Full run (`haldio run <pdf> -o <dir>`) with the real model once the user unloads the LLM.
+- Unit-size decision (250 vs 400 chars per TTS unit) after the listening test.
 - User feedback on the RC with a real PDF; then 0.1.0 final.
 
 ## Open questions
 
-None blocking.
-
-1. **Qwen3-TTS details** (voices, max characters per call, output sample rate):
-   `QwenTTSBackend` uses the OpenAI-compatible contract; confirm when the server runs.
-2. **Review-before-speech default.** Off (`review_before_tts: false`), as in the brief.
+1. **Review-before-speech default.** Off (`review_before_tts: false`), as in the brief.

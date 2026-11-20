@@ -59,9 +59,13 @@ TTS backends: `mock` (silent test audio, no model needed) and `qwen_local`
 
 ```
 uv venv .venv-tts --python 3.12
-uv pip install --python .venv-tts "qwen-tts>=0.1" soundfile huggingface_hub
-uv pip install --python .venv-tts torch --index-url https://download.pytorch.org/whl/rocm6.4
+.venv-tts\Scripts\pip install torch torchaudio --no-index --find-links https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/
+.venv-tts\Scripts\pip install "qwen-tts>=0.1" soundfile huggingface_hub
 ```
+
+The ROCm wheels above fit AMD GPUs on Windows. On NVIDIA use the PyTorch CUDA index
+(`--index-url https://download.pytorch.org/whl/cu128`); on a CPU-only machine plain
+`pip install torch torchaudio`.
 
 In `config.yaml` set `tts.backend: qwen_local`, the chosen `tts.model_id`
 (for example `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`), `tts.mode`, and
@@ -75,7 +79,9 @@ uv run haldio tts-check   # load the model, print voices, write tts-check.wav
 After `tts-pull` the worker runs offline (`HF_HUB_OFFLINE=1`). Mode `clone`
 (Base model) needs a reference clip of at least 3 seconds in `voices/`; mode
 `custom_voice` (CustomVoice model) uses preset voices. The web settings page
-has the same check behind the "Test TTS" button.
+has the same check behind the "Test TTS" button. If the LLM and the TTS model
+do not fit into memory at the same time, set `hooks.before_speak` to
+`lms unload --all` so the LLM is unloaded before stage S8.
 
 ## Test and lint
 
