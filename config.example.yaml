@@ -23,6 +23,7 @@ tts:
   reference_text: ""     # clone only, if the API needs it
   max_chars_per_unit: 400
   batch_size: 1
+  confirm_before_start: true   # web jobs pause before TTS until you confirm
 editor:
   prompt_version: v1
   fidelity_check: true
@@ -47,7 +48,7 @@ paths:
 hooks:
   before_edit: ""
   after_edit: ""
-  before_speak: ""       # e.g. lms unload --all
+  before_speak: ""       # optional shell command around a stage
   after_speak: ""
 server:
   host: 127.0.0.1
