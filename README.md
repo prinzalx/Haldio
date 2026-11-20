@@ -48,8 +48,34 @@ uv run haldio run <pdf> -o <dir>         # S1-S9: full audiobook
 uv run haldio serve                      # web interface on port 8505
 ```
 
-Open http://127.0.0.1:8505 (German user interface): upload a PDF, watch the job,
-listen to and download the result. The settings page can test both servers.
+Open http://127.0.0.1:8505 (German user interface).
+
+## Web interface
+
+- **Bücherei** — upload card with drag & drop, language and voice choice and the
+  "Skript vor der Sprachausgabe prüfen" option; the job list shows title, file,
+  pages, audio length, date, a German status badge and progress, newest first.
+  A banner counts jobs waiting in the ready2tts pool ("Alle TTS starten").
+- **Job page** — a seven-stage stepper (Einlesen → … → Mastern) with state text,
+  progress bar and current message; during Sprechen it counts units
+  ("Einheit 12 von 957") and shows an ETA measured from this run's finished
+  units, never a hard-coded factor. A summary card appears once the plan exists;
+  a result card offers `<audio controls>` and downloads (MP3, OGG, Skript,
+  QA-Bericht, PDF — named after the PDF title) for files that exist.
+  Actions follow the state: Abbrechen, Weiter, Neu starten, Skript prüfen,
+  Löschen (dialog). The log lives in a collapsed `<details>`.
+- **Skript prüfen** — original text next to the edited script per chunk, chapter
+  title in the header, readable warnings, save per chunk with HTMX ("Gespeichert"
+  toast) and a "Nur Warnungen anzeigen" filter.
+- **Einstellungen** — read-only config table; "Test LM Studio" and "Test TTS"
+  show a spinner and a clear result next to the button (TTS respects the model
+  guard: the LLM must be unloaded first).
+- Light and dark theme (system preference, switchable, remembered). No Node.js:
+  FastAPI + Jinja2 + a vendored htmx, so the UI works offline.
+
+Screenshots of all four pages in both themes: `docs/screenshots/`
+(`uv run python scripts/screenshots.py` regenerates them from mock data —
+no TTS model is started).
 
 Conversion is time-shifted: stages S1–S7 run with the big editor LLM, then the job
 pauses in the **ready2tts** pool. The job page asks you to close all other local LLM
@@ -58,8 +84,9 @@ first, let them all be prepared, and start their speech one by one or with
 "Alle TTS starten" on the library page. Set `tts.confirm_before_start: false` to run
 a job through without the pause.
 
-TTS backends: `mock` (silent test audio, no model needed) and `qwen_local`
-(the tool runs Qwen3-TTS itself in a worker subprocess). Set `tts.backend` in
+TTS backends: `qwencpp` (recommended — talks to a local qwentts.cpp `tts-server`
+process on port 8111, Vulkan), `mock` (silent test audio, no model needed) and
+`qwen_local` (deprecated PyTorch worker, kept as fallback). Set `tts.backend` in
 `config.yaml`.
 
 ## TTS setup

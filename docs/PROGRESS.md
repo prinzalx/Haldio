@@ -252,3 +252,20 @@ became a time-shifted process.
   additionally kept in localStorage).
 - Page frame: fixed - <title> per page, 🎧 favicon, top bar links to Bücherei
   and Einstellungen.
+
+## Correction 4 - section 5 Tests and finish
+
+- Unit tests: done - model guard with a fake `lms ps` (test_qwencpp/test_web),
+  CSRF foreign origin, upload magic-bytes and size limit, review save keeps all
+  script.json fields and rewrites script.md, status label function (German label
+  for every status id), download list shows only files that exist, silence
+  fallback with a fake tts-server. 109 tests pass.
+- TestClient page tests: done - library (empty text, title, banner), job page
+  (German label, stepper, summary card, result card, log tail), review page and
+  per-chunk HTMX save, settings page, all with status code and key German texts.
+- Screenshots: done - `scripts/screenshots.py` serves the real app on mock data
+  (no TTS model started) and Playwright captures library, running job, finished
+  job and review in light AND dark into `docs/screenshots/` (8 PNGs).
+- Docs: done - README has a "Web interface" section; playwright added to the dev
+  extra.
+- Stop: waiting for the owner's OK on the screenshots before any further web work.
