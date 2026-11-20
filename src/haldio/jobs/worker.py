@@ -68,10 +68,11 @@ class Worker:
     def cancel(self, job_id: str) -> None:
         self._cancelled.add(job_id)
         job = self.index.get(job_id)
-        if job is not None and job.status == "queued":
-            with self._lock:
-                if job_id in self._queue:
-                    self._queue.remove(job_id)
+        if job is not None and job.status in ("queued", "awaiting_tts"):
+            if job.status == "queued":
+                with self._lock:
+                    if job_id in self._queue:
+                        self._queue.remove(job_id)
             job.status = "cancelled"
             self.index.update(job)
 
@@ -118,6 +119,11 @@ class Worker:
                 job.status = "awaiting_review"
                 job.progress = 60
                 job.error = ""
+            elif result.tts_gate:
+                job.status = "awaiting_tts"
+                job.progress = 60
+                job.error = ""
+                job.message = "Bereit für Sprachausgabe"
             else:
                 job.status = "done" if result.return_code == 0 else "failed"
                 job.progress = 100 if result.return_code == 0 else job.progress

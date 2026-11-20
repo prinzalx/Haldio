@@ -7,6 +7,12 @@
     <progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%
   </p>
   {% if job.message %}<p class="muted">{{ job.message }}</p>{% endif %}
+  {% if job.status == "awaiting_tts" %}
+  <p class="error">🔊 Beginn der TTS: Bitte alle anderen lokalen LLM beenden.</p>
+  <form method="post" action="/jobs/{{ job.id }}/speak">
+    <button type="submit">OK — Sprachausgabe starten</button>
+  </form>
+  {% endif %}
   {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}
   {% if files %}
   <p>⬇ Downloads:

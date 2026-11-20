@@ -51,6 +51,13 @@ uv run haldio serve                      # web interface on port 8505
 Open http://127.0.0.1:8505 (German user interface): upload a PDF, watch the job,
 listen to and download the result. The settings page can test both servers.
 
+Conversion is time-shifted: stages S1–S7 run with the big editor LLM, then the job
+pauses in the **ready2tts** pool. The job page asks you to close all other local LLM
+and confirm with OK; only then the TTS worker starts (stages S8–S9). Upload many PDFs
+first, let them all be prepared, and start their speech one by one or with
+"Alle TTS starten" on the library page. Set `tts.confirm_before_start: false` to run
+a job through without the pause.
+
 TTS backends: `mock` (silent test audio, no model needed) and `qwen_local`
 (the tool runs Qwen3-TTS itself in a worker subprocess). Set `tts.backend` in
 `config.yaml`.
@@ -79,9 +86,9 @@ uv run haldio tts-check   # load the model, print voices, write tts-check.wav
 After `tts-pull` the worker runs offline (`HF_HUB_OFFLINE=1`). Mode `clone`
 (Base model) needs a reference clip of at least 3 seconds in `voices/`; mode
 `custom_voice` (CustomVoice model) uses preset voices. The web settings page
-has the same check behind the "Test TTS" button. If the LLM and the TTS model
-do not fit into memory at the same time, set `hooks.before_speak` to
-`lms unload --all` so the LLM is unloaded before stage S8.
+has the same check behind the "Test TTS" button. The TTS worker needs the memory
+the editor LLM used, so close the LLM before stage S8 — the ready2tts gate
+(see "Run") does this for you.
 
 ## Test and lint
 

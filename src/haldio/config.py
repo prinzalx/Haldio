@@ -39,6 +39,7 @@ class TtsConfig(BaseModel):
     reference_text: str = ""
     max_chars_per_unit: int = 400
     batch_size: int = 1
+    confirm_before_start: bool = True
 
 
 class EditorConfig(BaseModel):

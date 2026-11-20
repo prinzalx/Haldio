@@ -201,6 +201,7 @@ class BookResult:
     speak: SpeakResult
     master: MasterResult
     review_paused: bool = False
+    tts_gate: bool = False
 
     @property
     def return_code(self) -> int:
@@ -229,14 +230,21 @@ def run_book(
     pronunciations_path: Path | None = None,
     progress: Callable[[str, int], None] | None = None,
     stop_after_script: bool = False,
+    stop_before_tts: bool = False,
 ) -> BookResult:
-    """Run S1..S9: PDF in, script, unit audio and master files out."""
+    """Run S1..S9: PDF in, script, unit audio and master files out.
+
+    stop_after_script pauses at the review gate; stop_before_tts pauses in the
+    ready2tts pool so the user can free memory before the TTS worker starts.
+    """
     report = progress or (lambda _stage, _value: None)
     script = run_script(pdf_path, config, out_dir, client_factory, progress)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
     if stop_after_script:
         return BookResult(script, SpeakResult(), MasterResult(), review_paused=True)
+    if stop_before_tts:
+        return BookResult(script, SpeakResult(), MasterResult(), tts_gate=True)
 
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)

@@ -24,7 +24,7 @@ that stage gets most of the effort.
 | Editor LLM | `bubo` at `http://127.0.0.1:8080/v1`, 200k ctx, text+image | LM Studio style, `/v1/models` works |
 | TTS | Qwen3-TTS runs **inside our tool** (Correction 1): `qwen-tts` package in a worker subprocess | HTTP adapter removed |
 | Web UI port | **8505** | 8080 is taken by the LLM |
-| GPU / RAM | AMD Radeon 8060S (Strix Halo, shared VRAM), 31.6 GB RAM | unload hooks are worth keeping |
+| GPU / RAM | AMD Radeon 8060S (Strix Halo, shared VRAM), 31.6 GB RAM | LLM + TTS together froze the machine → ready2tts gate (Correction 2) |
 
 ## 3. Pipeline
 
@@ -41,7 +41,7 @@ between stages.
 | S4 Chunk | chunk inputs | structure-first, max 1500 tokens, context per chunk |
 | S5 Edit | `03_edit/chunks/*.out.json` | editor LLM, save each result at once |
 | S6 Verify | `03_edit/qa.json` | automatic checks + fidelity call, max 2 retries |
-| S7 Assemble | `04_script/script.md`, `script.json` | optional `awaiting_review` stop |
+| S7 Assemble | `04_script/script.md`, `script.json` | optional `awaiting_review` stop; the ready2tts gate pauses here (Correction 2) |
 | S8 Speak | `05_speak/units/*.wav` | Qwen3-TTS worker subprocess, cached by hash |
 | S9 Master | `06_output/*` | ffmpeg joins, loudness, MP3/OGG, tags, chapters |
 

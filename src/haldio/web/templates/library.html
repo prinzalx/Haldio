@@ -10,6 +10,14 @@
 </section>
 <section class="card">
   <h2>🎧 Jobs <span class="chip">{{ jobs | length }}</span></h2>
+  {% set ready = jobs | selectattr("status", "equalto", "awaiting_tts") | list %}
+  {% if ready %}
+  <p class="muted">Bereit für Sprachausgabe: {{ ready | length }} — andere lokale LLM
+     beenden, dann starten.</p>
+  <form method="post" action="/tts-pool/start">
+    <button type="submit">🔊 Alle TTS starten</button>
+  </form>
+  {% endif %}
   {% if jobs %}
   <table class="jobs">
     <tr><th>Datei</th><th>Status</th><th>Fortschritt</th><th></th></tr>

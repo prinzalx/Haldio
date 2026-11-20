@@ -128,22 +128,35 @@ Result: `haldio tts-check` ran on the real model (ROCm/HIP), printed the nine vo
 and ten languages, and wrote `tts-check.wav`. The user found the default voice too
 foreign-sounding, listened to one sample per voice, and chose **dylan** (now
 `tts.speaker` in `config.yaml`). A longer German test text followed
-(`tts-check-dylan.wav`). The full run waits: this machine cannot hold the big LLM and
-Qwen3-TTS in memory at the same time, so `hooks.before_speak` is set to
-`lms unload --all` and the full run happens when the user unloads the LLM.
+(`tts-check-dylan.wav`).
+
+## Correction 2 — ready2tts gate (2026-11-20)
+
+RAM is too small for the big LLM and the TTS worker at the same time: the second
+worker load while the LLM was running froze the whole machine (power cycle needed),
+and no unload command ends the LM Studio model process. Conversion therefore
+became a time-shifted process.
+
+- After S7 a web job stops in state `awaiting_tts` (the ready2tts pool).
+- The job page shows "Bitte alle anderen lokalen LLM beenden" with an OK button;
+  only then stages S8–S9 run.
+- Library page: count of ready jobs and "Alle TTS starten" for the whole pool.
+- `tts.confirm_before_start` (default on) controls the gate; cancel works on pool
+  jobs; batch upload works: prepare many PDFs first, speak them together or singly.
+- 68 tests pass, `ruff` clean. See `docs/decisions/0005-ready2tts-gate.md`.
 
 ## Known limitations
 
 - ffmpeg is installed on the dev machine (winget, 9.1); other users still install
   it themselves — S9 asks politely if it is missing.
 - The big editor LLM and the local TTS worker do not fit into RAM at the same time
-  on this machine; `hooks.before_speak` (`lms unload --all`) frees memory before S8.
+  on this machine; the ready2tts gate pauses the job until the user closes the LLM.
 - Cancel takes effect between chunks/stages, not mid-request.
 - Screenshots in the README need the running UI (skipped in headless tests).
 
 ## Next
 
-- Full run (`haldio run <pdf> -o <dir>`) with the real model once the user unloads the LLM.
+- Full run with the real model once the user allows TTS again (web pool or `haldio run`).
 - Unit-size decision (250 vs 400 chars per TTS unit) after the listening test.
 - User feedback on the RC with a real PDF; then 0.1.0 final.
 

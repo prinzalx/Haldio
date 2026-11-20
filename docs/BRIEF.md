@@ -1,6 +1,6 @@
 # Brief for the coding agent: PDF-to-audiobook tool (working name: Haldio)
 
-Corrected by Correction 1.
+Corrected by Correction 1 and Correction 2.
 
 ## 1. Your role
 
@@ -78,6 +78,8 @@ Do this:
 ## 7. Pipeline
 
 The stages run in strict sequence. Each stage reads files and writes files. Each stage can run again alone. The LLM and the TTS model do not need to be in memory at the same time. The optional config hooks `before_edit`, `after_edit`, `before_speak`, `after_speak` (Correction 1, replaces the earlier two hooks) let me unload a model between stages.
+
+Corrected by Correction 2 (2026-11-20): on this machine an unload command does not free the memory of the big LLM, so the web flow stops by itself. Stages S1–S7 run with the big LLM. When only the TTS is left, the job pauses in state `awaiting_tts` (the ready2tts pool) and the web UI asks: "Beginn der TTS — bitte alle anderen lokalen LLM beenden" with an OK button. Only after that OK the job runs S8 and S9. Many PDFs can be uploaded; all are prepared first and the pool is worked off together or one by one. `tts.confirm_before_start` controls this gate (default: on). The conversion is a time-shifted process, not one long run.
 
 Cache key of an editor result: hash of (input, prompt version, model id, parameters). After a crash, skip all results that have a valid cache key.
 
@@ -316,7 +318,7 @@ The reference clip must be at least 3 seconds long. Put it in `voices/`. Add
 
 - S8 starts the worker, waits for it, and the worker exits at the end of the stage.
 - The hooks are per stage: `before_edit`, `after_edit`, `before_speak`, `after_speak`.
-- Example for `before_speak`: `lms unload --all` (verified: the command exists).
+- Example for `before_speak`: an optional shell command. Corrected by Correction 2: `lms unload --all` did not free memory here, so the ready2tts confirmation gate (section 7) is the real mechanism.
 - The rule stays: LLM stages and the TTS stage never run at the same time.
 
 ### 9.6 Unchanged rules from the original section 9
@@ -400,6 +402,7 @@ tts:
   reference_text: ""      # clone only, if the API needs it
   max_chars_per_unit: 400
   batch_size: 1
+  confirm_before_start: true   # ready2tts gate (Correction 2)
 editor:
   prompt_version: v1
   fidelity_check: true

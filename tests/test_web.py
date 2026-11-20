@@ -31,10 +31,12 @@ def _fake_result(out_dir: Path) -> BookResult:
 def app_parts(tmp_path):
     config = Config()
     config.paths.data_dir = tmp_path
+    config.tts.confirm_before_start = False
     index = JobIndex(tmp_path / "data")
     calls: list[str] = []
 
-    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False):
+    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False,
+               stop_before_tts=False):
         calls.append(str(pdf_path))
         if progress:
             progress("editing", 30)
@@ -44,6 +46,55 @@ def app_parts(tmp_path):
     worker = Worker(index, config, run_fn=run_fn, inline=True)
     app = create_app(config, index=index, worker=worker)
     return app, index, calls
+
+
+def _gate_app(tmp_path, monkeypatch):
+    """App with the ready2tts gate on (the shipped default)."""
+    config = Config()
+    config.paths.data_dir = tmp_path
+    index = JobIndex(tmp_path / "data")
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False,
+               stop_before_tts=False):
+        if stop_before_tts:
+            return BookResult(
+                ScriptResult(out_dir=out_dir, chunks=2), SpeakResult(), MasterResult(),
+                tts_gate=True,
+            )
+        return _fake_result(out_dir)
+
+    monkeypatch.setattr(
+        "haldio.jobs.worker.run_speech",
+        lambda folder, cfg, language, **kwargs: _fake_result(folder),
+    )
+    worker = Worker(index, config, run_fn=run_fn, inline=True)
+    app = create_app(config, index=index, worker=worker)
+    return app, index
+
+
+def test_ready2tts_gate_pauses_and_resumes(tmp_path, monkeypatch) -> None:
+    app, index = _gate_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.list()[0]
+    assert job.status == "awaiting_tts"
+    assert job.progress == 60
+    page = client.get(location)
+    assert "Bitte alle anderen lokalen LLM beenden" in page.text
+    response = client.post(f"{location}/speak", follow_redirects=False)
+    assert response.status_code == 303
+    assert index.get(job.id).status == "done"
+
+
+def test_ready2tts_pool_starts_all(tmp_path, monkeypatch) -> None:
+    app, index = _gate_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    _upload_pdf(client)
+    _upload_pdf(client)
+    assert [job.status for job in index.list()] == ["awaiting_tts", "awaiting_tts"]
+    response = client.post("/tts-pool/start", follow_redirects=False)
+    assert response.status_code == 303
+    assert [job.status for job in index.list()] == ["done", "done"]
 
 
 def _upload_pdf(client: TestClient) -> str:

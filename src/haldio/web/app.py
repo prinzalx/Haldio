@@ -117,6 +117,15 @@ def create_app(
         app.state.worker.enqueue(job_id)
         return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
+    @app.post("/tts-pool/start")
+    def start_tts_pool() -> RedirectResponse:
+        for job in app.state.index.list():
+            if job.status == "awaiting_tts":
+                job.options["resume_from"] = "speaking"
+                app.state.index.update(job)
+                app.state.worker.enqueue(job.id)
+        return RedirectResponse("/", status_code=303)
+
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(

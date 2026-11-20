@@ -23,8 +23,9 @@ official `qwen-tts` package (PyPI, class `Qwen3TTSModel`).
   existing files skipped, one JSON progress line per unit, `error` line plus
   non-zero exit on failure. The stage directory stays `05_speak/` (the brief's
   older text says `05_tts/`; existing jobs and tests use `05_speak/`).
-- Hooks per stage: before_edit, after_edit, before_speak, after_speak
-  (`before_speak: lms unload --all`). Verified `lms unload` exists.
+- Hooks per stage: before_edit, after_edit, before_speak, after_speak.
+  Correction 2 showed that an unload command does not free the memory here, so
+  the ready2tts gate (decision 0005) asks the user instead.
 - Model ids are config values, never hard-coded. The model is looked up as
   `tts.model_path`, then `models/<name>`, then the Hugging Face id. After
   `haldio tts-pull` the worker runs with `HF_HUB_OFFLINE=1`.
