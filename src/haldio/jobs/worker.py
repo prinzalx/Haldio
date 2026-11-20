@@ -13,6 +13,7 @@ from typing import Any
 from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
 from haldio.pipeline.run import BookResult, run_book, run_speech
+from haldio.tts.base import ModelGuardError
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
 _LOG_TAIL = 30
@@ -196,6 +197,13 @@ class Worker:
             self.index.update(job)
         except _Cancelled:
             job.status = "cancelled"
+            self.index.update(job)
+        except ModelGuardError as error:
+            # the model guard blocked the TTS start: the user must unload the LLM
+            job.status = "waiting_for_user"
+            job.message = "Bitte das LLM in LM Studio entladen, dann Weiter drücken."
+            job.error = str(error)
+            self._log(job, f"model guard: {error}")
             self.index.update(job)
         except Exception as error:  # noqa: BLE001 - a job failure must not kill the thread
             job.status = "failed"

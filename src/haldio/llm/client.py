@@ -31,6 +31,30 @@ def llm_reachable(llm: LlmConfig, timeout: float = 3.0) -> bool:
         return False
 
 
+def loaded_llm_models(timeout: float = 15.0) -> list[str] | None:
+    """Model ids LM Studio keeps in memory.
+
+    Uses the verified `lms ps --json` command (the REST path /api/v0/models
+    answered 404 on this machine). Returns None when no check is possible -
+    callers then fall back to the manual gate.
+    """
+    import subprocess
+
+    try:
+        done = subprocess.run(  # noqa: S603 - fixed command, no shell
+            ["lms", "ps", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if done.returncode == 0:
+            entries = json.loads(done.stdout)
+            return [str(e.get("modelIdentifier") or e.get("id") or e) for e in entries]
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 @dataclass
 class ChatResult:
     """One assistant answer, already cleaned."""

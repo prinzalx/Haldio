@@ -333,9 +333,114 @@ def test_settings_page_shows_endpoints(app_parts) -> None:
 def test_settings_test_tts_mock(app_parts) -> None:
     app, _index, _calls = app_parts
     client = TestClient(app)
-    response = client.get("/settings/test-tts")
+    response = client.post("/settings/test-tts")
     assert response.status_code == 200
     assert "TTS ok" in response.text
+
+
+def test_settings_test_tts_is_post_only(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    assert client.get("/settings/test-tts").status_code == 405
+
+
+def test_upload_rejects_bad_magic(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post(
+        "/upload",
+        files={"file": ("doc.pdf", b"plain text not a pdf", "application/pdf")},
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+
+
+def test_upload_rejects_too_large(tmp_path) -> None:
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.server.max_upload_mb = 1
+    index = JobIndex(tmp_path / "data")
+    worker = Worker(index, config, run_fn=lambda *a, **k: _fake_result(Path(".")), inline=True)
+    app = create_app(config, index=index, worker=worker)
+    client = TestClient(app)
+    response = client.post(
+        "/upload",
+        files={"file": ("big.pdf", b"%PDF-" + b"x" * (1024 * 1024 + 10), "application/pdf")},
+        follow_redirects=False,
+    )
+    assert response.status_code == 413
+
+
+def test_csrf_foreign_origin_rejected(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    _upload_pdf(client)
+    job_id = index.list()[0].id
+    response = client.post(
+        f"/jobs/{job_id}/delete",
+        headers={"Origin": "http://evil.example"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 403
+
+
+def test_delete_is_post_only(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    _upload_pdf(client)
+    job_id = index.list()[0].id
+    assert client.get(f"/jobs/{job_id}/delete").status_code == 405
+
+
+def test_review_save_keeps_fields_and_rewrites_md(app_parts) -> None:
+    import json
+
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    script_file = index.jobs_dir / job_id / "04_script" / "script.json"
+    script_file.parent.mkdir(parents=True, exist_ok=True)
+    script_file.write_text(
+        json.dumps(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "c0001",
+                        "blocks": [{"kind": "paragraph", "text": "Alter Text."}],
+                        "warnings": [],
+                        "needs_review": False,
+                    }
+                ],
+                "chapter_ids": ["c0001"],
+                "doc_meta": {"title": "Buch"},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    response = client.post(
+        f"/jobs/{job_id}/review", data={"c0b0": "Neuer Text."}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    data = json.loads(script_file.read_text(encoding="utf-8"))
+    assert data["chapter_ids"] == ["c0001"]
+    assert data["doc_meta"] == {"title": "Buch"}
+    assert data["chunks"][0]["blocks"][0]["text"] == "Neuer Text."
+    markdown = (script_file.parent / "script.md").read_text(encoding="utf-8")
+    assert "Neuer Text." in markdown and "Alter Text." not in markdown
+
+
+def test_model_guard_blocks_server_start(monkeypatch) -> None:
+    from haldio.config import TtsConfig
+    from haldio.tts.base import TTSParams
+    from haldio.tts.qwencpp import QwenCppBackend
+
+    monkeypatch.setattr("haldio.tts.qwencpp.loaded_llm_models", lambda **kw: ["bubo"])
+    backend = QwenCppBackend(TtsConfig(backend="qwencpp"))
+    with pytest.raises(Exception) as caught:
+        backend.synthesize("Hallo.", "de", TTSParams(voice="dylan"))
+    assert type(caught.value).__name__ == "ModelGuardError"
 
 
 def test_review_page_and_edit(app_parts, tmp_path) -> None:

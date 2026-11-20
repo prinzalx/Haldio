@@ -48,6 +48,18 @@ def assemble_script(edits: list[ChunkEdit]) -> tuple[str, dict[str, Any]]:
     return script_md, data
 
 
+def render_script_md(chunks: list[dict]) -> str:
+    """Markdown for script.json chunk data (headings by level, else plain text)."""
+    markdown = []
+    for chunk in chunks:
+        for block in chunk.get("blocks", []):
+            if block.get("kind") == "heading":
+                markdown.append("#" * int(block.get("level") or 1) + " " + block.get("text", ""))
+            else:
+                markdown.append(block.get("text", ""))
+    return "\n\n".join(markdown) + "\n"
+
+
 def write_script(out_dir: Path, script_md: str, data: dict[str, Any]) -> None:
     script_dir = out_dir / "04_script"
     script_dir.mkdir(parents=True, exist_ok=True)

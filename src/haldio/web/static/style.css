@@ -35,6 +35,11 @@ a { color: #7fb2ff; }
 .badge-cancelled { background: #5a5a5a; }
 .badge-editing, .badge-speaking, .badge-mastering, .badge-extracting { background: #274d7a; }
 .badge-waiting_for_user { background: #8a6d1f; }
+dialog {
+  border: 0; border-radius: 8px; padding: 16px 20px;
+  background: #232a31; color: #e8eaed;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 button {
   background: #274d7a; color: #fff; border: 0; border-radius: 6px;
   padding: 4px 10px; cursor: pointer;

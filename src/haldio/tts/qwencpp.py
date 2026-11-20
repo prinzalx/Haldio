@@ -19,7 +19,8 @@ from pathlib import Path
 import httpx
 
 from haldio.config import TtsConfig
-from haldio.tts.base import AudioResult, TTSBackend, TTSParams, Voice
+from haldio.llm.client import loaded_llm_models
+from haldio.tts.base import AudioResult, ModelGuardError, TTSBackend, TTSParams, Voice
 
 # The server wants the upstream qwen3-tts language names ("german", ...).
 _LANG_NAMES = {
@@ -67,6 +68,9 @@ class QwenCppBackend(TTSBackend):
         """Start tts-server once and wait until /health answers."""
         if self._client is not None:
             return
+        loaded = loaded_llm_models()
+        if loaded:
+            raise ModelGuardError(f"LM Studio lädt noch: {', '.join(loaded)}")
         binary = self._server_path()
         if not binary.is_file():
             raise RuntimeError(f"tts-server not found: {binary} - build qwentts.cpp first")

@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 
+class ModelGuardError(RuntimeError):
+    """An LLM is still loaded in LM Studio; starting TTS would crash the machine."""
+
+
 @dataclass
 class Voice:
     """One available voice."""

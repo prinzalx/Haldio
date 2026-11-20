@@ -6,9 +6,17 @@
   {% include "partials/job_status.html" %}
   <p class="actions">
     <a href="/jobs/{{ job.id }}/review">📝 Skript prüfen</a>
-    <form method="post" action="/jobs/{{ job.id }}/delete">
-      <button class="danger">🗑 Löschen</button>
-    </form>
+    <button class="danger" type="button" onclick="document.getElementById('del-job').showModal()">🗑 Löschen</button>
+    <dialog id="del-job">
+      <form method="post" action="/jobs/{{ job.id }}/delete">
+        <p><strong>{{ job.file_name }}</strong></p>
+        <p>Das Hörbuch und alle Daten dieses Jobs werden gelöscht.</p>
+        <p class="actions">
+          <button class="danger" type="submit">Löschen</button>
+          <button type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </p>
+      </form>
+    </dialog>
     <a href="/">← Zurück</a>
   </p>
 </section>

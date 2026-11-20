@@ -27,9 +27,18 @@
       <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
       <td><progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%</td>
       <td class="actions">
-        <form method="post" action="/jobs/{{ job.id }}/delete">
-          <button class="danger" title="Löschen">🗑</button>
-        </form>
+        <button class="danger" type="button" title="Löschen"
+                onclick="document.getElementById('del-{{ job.id }}').showModal()">🗑</button>
+        <dialog id="del-{{ job.id }}">
+          <form method="post" action="/jobs/{{ job.id }}/delete">
+            <p><strong>{{ job.file_name }}</strong></p>
+            <p>Das Hörbuch und alle Daten dieses Jobs werden gelöscht.</p>
+            <p class="actions">
+              <button class="danger" type="submit">Löschen</button>
+              <button type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+            </p>
+          </form>
+        </dialog>
       </td>
     </tr>
     {% endfor %}

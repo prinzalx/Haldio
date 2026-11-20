@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import html
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,6 +17,8 @@ from haldio import __version__
 from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
 from haldio.jobs.worker import Worker
+from haldio.pipeline.assemble import render_script_md
+from haldio.tts.base import ModelGuardError
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -33,6 +37,18 @@ def create_app(
     templates.env.filters["seconds"] = _format_seconds
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
+    @app.middleware("http")
+    async def csrf_origin(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Reject POSTs from a foreign origin (other web pages can target localhost)."""
+        if request.method == "POST":
+            origin = request.headers.get("origin") or request.headers.get("referer") or ""
+            host = origin.split("://", 1)[1].split("/", 1)[0] if "://" in origin else ""
+            if host and host != request.headers.get("host"):
+                return HTMLResponse("CSRF-Schutz: fremde Quelle.", status_code=403)
+        return await call_next(request)
+
     @app.get("/", response_class=HTMLResponse)
     def library(request: Request) -> HTMLResponse:
         jobs = app.state.index.list()
@@ -48,10 +64,10 @@ def create_app(
         name = file.filename or "upload.pdf"
         if not name.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Nur PDF-Dateien sind erlaubt.")
-        data = await file.read()
         limit = config.server.max_upload_mb * 1024 * 1024
-        if len(data) > limit:
-            raise HTTPException(status_code=413, detail="Datei zu groß für den Upload.")
+        data = await _read_limited(file, limit)
+        if not data.startswith(b"%PDF-"):
+            raise HTTPException(status_code=400, detail="Datei ist kein PDF (Magic Bytes).")
         job = app.state.index.create(name, options={"voice": voice})
         folder = app.state.index.jobs_dir / job.id
         folder.mkdir(parents=True, exist_ok=True)
@@ -116,13 +132,18 @@ def create_app(
         _require_job(app.state.index, job_id)
         form = await request.form()
         script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
-        chunks = _load_chunks(script_file)
+        data = json.loads(script_file.read_text(encoding="utf-8")) if script_file.is_file() else {}
+        chunks = data.get("chunks", [])
         for ci, chunk in enumerate(chunks):
             for bi, block in enumerate(chunk.get("blocks", [])):
                 key = f"c{ci}b{bi}"
                 if key in form:
                     block["text"] = str(form[key]).strip()
-        _store_chunks(script_file, chunks)
+        data["chunks"] = chunks
+        data["warnings"] = [w for c in chunks for w in c.get("warnings", [])]
+        script_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        # keep the markdown download in step with the edited script
+        (script_file.parent / "script.md").write_text(render_script_md(chunks), encoding="utf-8")
         return RedirectResponse(f"/jobs/{job_id}/review", status_code=303)
 
     @app.post("/jobs/{job_id}/speak")
@@ -183,9 +204,9 @@ def create_app(
             text = f"Fehler: {error}"
         except Exception as error:  # noqa: BLE001 - show any connection error in the UI
             text = f"Fehler: {error}"
-        return HTMLResponse(f"<span>{text}</span>")
+        return HTMLResponse(f"<span>{html.escape(text)}</span>")
 
-    @app.get("/settings/test-tts", response_class=HTMLResponse)
+    @app.post("/settings/test-tts")
     def test_tts() -> HTMLResponse:
         from haldio.tts import create_backend
         from haldio.tts.qwen_local import QwenLocalBackend
@@ -209,9 +230,11 @@ def create_app(
                     text = f"TTS ok: {names or 'keine Stimmen'}"
                 else:
                     text = f"Fehler: {message}"
+        except ModelGuardError as error:
+            text = f"Gestoppt: {error}"
         finally:
             backend.close()
-        return HTMLResponse(f"<span>{text}</span>")
+        return HTMLResponse(f"<span>{html.escape(text)}</span>")
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str) -> RedirectResponse:
@@ -239,6 +262,18 @@ _DOWNLOADABLE = (
 )
 
 
+async def _read_limited(file: UploadFile, limit: int) -> bytes:
+    """Stream the upload in and stop as soon as it exceeds the size limit."""
+    data = b""
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            return data
+        data += chunk
+        if len(data) > limit:
+            raise HTTPException(status_code=413, detail="Datei zu groß für den Upload.")
+
+
 def _require_job(index: JobIndex, job_id: str) -> Job:
     job = index.get(job_id)
     if job is None:
@@ -260,11 +295,6 @@ def _load_chunks(script_file: Path) -> list[dict[str, Any]]:
     if not script_file.is_file():
         return []
     return list(json.loads(script_file.read_text(encoding="utf-8")).get("chunks", []))
-
-
-def _store_chunks(script_file: Path, chunks: list[dict[str, Any]]) -> None:
-    data = {"chunks": chunks, "warnings": [w for c in chunks for w in c.get("warnings", [])]}
-    script_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _format_seconds(value: float | int) -> str:

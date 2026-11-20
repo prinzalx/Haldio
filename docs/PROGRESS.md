@@ -163,3 +163,20 @@ became a time-shifted process.
 ## Open questions
 
 1. **Review-before-speech default.** Off (`review_before_tts: false`), as in the brief.
+
+## Correction 4 (web interface) - section 1 Safety
+
+- Model guard: fixed - the qwencpp backend checks `lms ps --json` before it starts
+  tts-server (REST /api/v0/models answered 404 here, the lms CLI was verified); a
+  loaded model raises ModelGuardError and the job goes waiting_for_user with
+  "Bitte das LLM in LM Studio entladen, dann Weiter drücken.". Every path
+  (Weiter-Sprachausgabe, review button, Alle TTS starten, awaiting_tts, Test TTS)
+  ends in the backend, so none can skip the guard. No check possible -> manual gate.
+- Test TTS: fixed - now POST with the same guard and a warning text by the button.
+- Delete: fixed - native `<dialog>` shows the file name, delete runs on POST only.
+- Review save: fixed - keeps every field of script.json and rewrites script.md.
+- Upload: fixed - accepts only .pdf names with `%PDF-` magic bytes, streamed, stops
+  at the size limit.
+- HTML escaping: fixed - test results escaped, templates auto-escape.
+- CSRF: fixed - Origin/Referer host check on POST (403 for foreign origins).
+- htmx: fixed - vendored to `static/vendor/htmx.min.js`, UI works offline.

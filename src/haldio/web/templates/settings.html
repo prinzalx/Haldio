@@ -9,8 +9,9 @@
         <span id="llm-test"></span></td></tr>
     <tr><th>TTS (Sprecher)</th>
         <td>{{ config.tts.model_id }} · Backend {{ config.tts.backend }} · Modus {{ config.tts.mode }} · Stimme {{ config.tts.speaker or "(Standard)" }}</td>
-        <td><button hx-get="/settings/test-tts" hx-target="#tts-test">Test TTS</button>
-        <span id="tts-test"></span></td></tr>
+        <td><button hx-post="/settings/test-tts" hx-target="#tts-test">Test TTS</button>
+        <span id="tts-test"></span>
+        <p class="muted">Startet den TTS-Server — vorher das LLM entladen.</p></td></tr>
     <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>
     <tr><th>Server</th><td>{{ config.server.host }}:{{ config.server.port }}</td><td></td></tr>
   </table>
