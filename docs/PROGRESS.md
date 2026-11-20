@@ -57,12 +57,28 @@
   longer hid the gap and y-sorted the column lines into each other.
 - Tests: 41 pass; mock client tests; verify tests; chunk tests; retry tests.
 
-## Next — M3 speech
+## Done — M3 speech (2026-11-20)
 
-1. `tts/base.py` (TTSBackend interface), `tts/mock.py` (MockTTSBackend).
-2. `tts/normalizer.py` (num2words, identifier speakable, pronunciations.yaml).
-3. `pipeline/speak.py` (S8) and `pipeline/master.py` (S9).
-4. CLI `hoerbuch run <pdf>`, `QwenTTSBackend` after user confirms Qwen3-TTS setup.
+- `tts/normalizer.py`: pronunciations.yaml replacements, decimal comma ->
+  "Komma", standalone numbers -> words (num2words), CamelCase identifiers split.
+- `pipeline/speak.py` (S8): script blocks -> sentence-sized TTS units, one WAV per
+  unit under `05_speak/units/`, cache by hash(text, voice, backend), `units.json`.
+- `pipeline/master.py` (S9): ffmpeg concat with pause silences (paragraph/heading/
+  chapter) and per-format encode to `06_master/book.<fmt>`; clear error when
+  ffmpeg is missing (user installs it).
+- `tts/qwen3.py` (QwenTTSBackend): OpenAI-compatible POST /audio/speech; voices
+  from GET /audio/voices. Server not up yet — defaults from config, verify when
+  the user starts the TTS server.
+- CLI `hoerbuch run <pdf> -o <dir>`: full S1→S9; live check on the synthetic PDF:
+  3 chunks -> 19 units synthesized, master stopped with "ffmpeg not found".
+- Example `pronunciations.yaml` added; `tts.model` config key added.
+- Tests: 50 pass, 1 skip (ffmpeg), mock LLM + MockTTS end to end.
+
+## Next — M4 web
+
+1. Job index (`jobs/index.py` exists) + worker thread (resume, cancel, FIFO).
+2. Web UI in German: library page, job page with stages and downloads, delete.
+3. `hoerbuch serve`, Jinja2 + HTMX on port 8505.
 
 ## Open questions
 

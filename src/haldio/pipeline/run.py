@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from haldio.config import Config
+from haldio.config import Config, TtsConfig
 from haldio.extract import PyMuPDFExtractor
 from haldio.llm import LlmClient
 from haldio.pipeline.assemble import assemble_script, write_script
@@ -22,9 +22,13 @@ from haldio.pipeline.edit import (
 )
 from haldio.pipeline.editor_output import EDITOR_JSON_SCHEMA, ChunkEdit
 from haldio.pipeline.ingest import ingest
+from haldio.pipeline.master import MasterResult, make_master
 from haldio.pipeline.plan import build_doc_map
 from haldio.pipeline.qa_report import ChunkQA, render_qa_html, write_qa_report
+from haldio.pipeline.speak import SpeakResult, synthesize_script
 from haldio.pipeline.verify import Issue, verify_chunk
+from haldio.tts import TTSBackend, create_backend
+from haldio.tts.normalizer import load_pronunciations
 
 
 @dataclass
@@ -37,7 +41,12 @@ class ScriptResult:
     errors: int = 0
     warnings: int = 0
     error: str = ""
+    language: str = "de"
     doc_meta: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
 
     @property
     def return_code(self) -> int:
@@ -162,5 +171,71 @@ def run_script(
         needs_review=sum(1 for e in edits if e.needs_review),
         errors=sum(1 for c in qa if c.errors),
         warnings=sum(len(c.warnings) for c in qa),
+        language=target_language,
         doc_meta=doc_map,
     )
+
+
+@dataclass
+class BookResult:
+    """Outcome of the full S1..S9 pipeline."""
+
+    script: ScriptResult
+    speak: SpeakResult
+    master: MasterResult
+
+    @property
+    def return_code(self) -> int:
+        return 1 if (self.script.error or self.speak.error or self.master.error) else 0
+
+    def summary(self) -> str:
+        parts = [self.script.summary()]
+        if not self.speak.error:
+            parts.append(f"speak: {self.speak.synthesized} synthesized, {self.speak.cached} cached")
+        elif self.speak.error:
+            parts.append(f"speak failed: {self.speak.error}")
+        if self.master.ok:
+            names = ", ".join(f.name for f in self.master.files)
+            parts.append(f"master: {names}")
+        elif self.master.error:
+            parts.append(f"master: {self.master.error}")
+        return "\n".join(parts)
+
+
+def run_book(
+    pdf_path: Path,
+    config: Config,
+    out_dir: Path,
+    client_factory: Callable[[], LlmClient] | None = None,
+    backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
+    pronunciations_path: Path | None = None,
+) -> BookResult:
+    """Run S1..S9: PDF in, script, unit audio and master files out."""
+    script = run_script(pdf_path, config, out_dir, client_factory)
+    if not script.ok:
+        return BookResult(script, SpeakResult(error=script.error), MasterResult())
+
+    data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
+    backend = (backend_factory or create_backend)(config.tts)
+    try:
+        spoken = synthesize_script(
+            data,
+            backend,
+            config.tts.backend,
+            config.tts,
+            out_dir,
+            script.language,
+            load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
+        )
+    finally:
+        backend.close()
+    if not spoken.ok:
+        return BookResult(script, spoken, MasterResult(error=spoken.error))
+
+    master = make_master(
+        out_dir,
+        config.audio.formats,
+        config.audio.pause_ms.model_dump(),
+        config.audio.mp3_bitrate_kbps,
+    )
+    return BookResult(script, spoken, master)

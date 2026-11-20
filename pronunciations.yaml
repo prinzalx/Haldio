@@ -1,0 +1,6 @@
+# Pronunciation table for the TTS stage (S8). One term per line: written -> spoken.
+# The normalizer replaces the term before synthesis, so the TTS reads it correctly.
+# Examples:
+# PDF: P D F
+# USB: U S B
+# Qt: Kyu Ti

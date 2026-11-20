@@ -28,6 +28,7 @@ class TtsConfig(BaseModel):
     backend: Literal["mock", "qwen3"] = "mock"
     base_url: str = "http://127.0.0.1:1234/v1"
     api_key: str = ""
+    model: str = "qwen3-tts"
     voice: str = ""
     language: str = "auto"
     max_chars_per_unit: int = 400

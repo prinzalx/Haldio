@@ -8,7 +8,7 @@ from pathlib import Path
 
 from haldio import __version__
 from haldio.config import load_config
-from haldio.pipeline.run import run_script
+from haldio.pipeline.run import run_book, run_script
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,12 +19,11 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = sub.add_parser("inspect", help="Print the structure of a PDF (M1).")
     inspect_parser.add_argument("pdf", help="Path to the PDF file")
     inspect_parser.add_argument("--json", action="store_true", help="Write document.json")
-    # M3: run <pdf>, M4: serve
-    for name, help_text in (
-        ("run", "Build the audiobook end to end (M3)."),
-        ("serve", "Start the web interface (M4)."),
-    ):
-        sub.add_parser(name, help=help_text)
+    # M4: serve
+    run_parser = sub.add_parser("run", help="Build the audiobook end to end (M3).")
+    run_parser.add_argument("pdf", help="Path to the PDF file")
+    run_parser.add_argument("-o", "--out", default=None, help="Output directory")
+    sub.add_parser("serve", help="Start the web interface (M4).")
     script_parser = sub.add_parser("script", help="Build script.md and the QA report (M2).")
     script_parser.add_argument("pdf", help="Path to the PDF file")
     script_parser.add_argument("-o", "--out", default=None, help="Output directory")
@@ -69,6 +68,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "script":
         out_dir = Path(args.out) if args.out else Path(".")
         result = run_script(Path(args.pdf), config, out_dir)
+        print(result.summary())
+        return result.return_code
+    if args.command == "run":
+        out_dir = Path(args.out) if args.out else Path("data/jobs/run")
+        result = run_book(Path(args.pdf), config, out_dir)
         print(result.summary())
         return result.return_code
     if args.command is None:
