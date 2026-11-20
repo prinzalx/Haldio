@@ -1,0 +1,47 @@
+:root { font-size: 14px; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #101418;
+  color: #e6e6e6;
+}
+.topbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: #1a2027; border-bottom: 1px solid #2c343d;
+}
+.brand { color: #e6e6e6; font-weight: 600; text-decoration: none; }
+.ver { color: #8a939c; font-size: 12px; }
+main { max-width: 860px; margin: 14px auto; padding: 0 10px; }
+.card {
+  background: #1a2027; border: 1px solid #2c343d; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 12px;
+}
+h1 { font-size: 17px; margin: 4px 0 8px; }
+h2 { font-size: 15px; margin: 4px 0 8px; }
+table.jobs { width: 100%; border-collapse: collapse; }
+table.jobs th, table.jobs td { padding: 4px 6px; text-align: left; border-bottom: 1px solid #2c343d; }
+a { color: #7fb2ff; }
+.chip {
+  display: inline-block; min-width: 18px; text-align: center;
+  background: #2c343d; border-radius: 10px; padding: 0 6px; font-size: 12px;
+}
+.badge {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 12px; background: #2c343d;
+}
+.badge-done { background: #1f6f3d; }
+.badge-failed { background: #8a2f2f; }
+.badge-cancelled { background: #5a5a5a; }
+.badge-editing, .badge-speaking, .badge-mastering, .badge-extracting { background: #274d7a; }
+button {
+  background: #274d7a; color: #fff; border: 0; border-radius: 6px;
+  padding: 4px 10px; cursor: pointer;
+}
+button.danger { background: #8a2f2f; }
+form { display: inline; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.upload { display: flex; gap: 8px; align-items: center; }
+.muted { color: #8a939c; }
+.error { color: #ff9a9a; }
+progress { width: 120px; height: 10px; vertical-align: middle; }

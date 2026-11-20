@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Haldio — {{ job.file_name }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>📄 {{ job.file_name }}</h1>
+  {% include "partials/job_status.html" %}
+  <p class="actions">
+    <form method="post" action="/jobs/{{ job.id }}/cancel">
+      <button>Abbrechen</button>
+    </form>
+    <form method="post" action="/jobs/{{ job.id }}/delete">
+      <button class="danger">🗑 Löschen</button>
+    </form>
+    <a href="/">← Zurück</a>
+  </p>
+</section>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Haldio — Bücherei{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>📚 Bücherei</h1>
+  <form method="post" action="/upload" enctype="multipart/form-data" class="upload">
+    <input type="file" name="file" accept="application/pdf" required>
+    <button type="submit">Hochladen</button>
+  </form>
+</section>
+<section class="card">
+  <h2>🎧 Jobs <span class="chip">{{ jobs | length }}</span></h2>
+  {% if jobs %}
+  <table class="jobs">
+    <tr><th>Datei</th><th>Status</th><th>Fortschritt</th><th></th></tr>
+    {% for job in jobs %}
+    <tr>
+      <td><a href="/jobs/{{ job.id }}">{{ job.file_name }}</a></td>
+      <td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td>
+      <td><progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%</td>
+      <td class="actions">
+        <form method="post" action="/jobs/{{ job.id }}/delete">
+          <button class="danger" title="Löschen">🗑</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Noch keine Jobs. Laden Sie ein PDF hoch.</p>
+  {% endif %}
+</section>
+{% endblock %}

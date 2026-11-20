@@ -116,12 +116,15 @@ def run_script(
     config: Config,
     out_dir: Path,
     client_factory: Callable[[], LlmClient] | None = None,
+    progress: Callable[[str, int], None] | None = None,
 ) -> ScriptResult:
     """Run S1..S7 and write the job folder layout."""
+    report = progress or (lambda _stage, _value: None)
     ingested = ingest(pdf_path)
     if not ingested.ok:
         return ScriptResult(out_dir=out_dir, error=ingested.error)
 
+    report("extracting", 5)
     out_dir.mkdir(parents=True, exist_ok=True)
     document = PyMuPDFExtractor().extract(pdf_path)
     _write_json(out_dir / "01_extract" / "document.json", document.to_dict())
@@ -139,7 +142,8 @@ def run_script(
     qa: list[ChunkQA] = []
     previous_tail = ""
     try:
-        for chunk in chunks:
+        for index, chunk in enumerate(chunks):
+            report("editing", 10 + int(50 * index / max(1, len(chunks))))
             chunk["previous_script_tail"] = previous_tail
             edit, issues = edit_chunk_with_retry(
                 chunk, client, system_prompt, target_language, config.editor.max_retries
@@ -209,13 +213,16 @@ def run_book(
     client_factory: Callable[[], LlmClient] | None = None,
     backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
     pronunciations_path: Path | None = None,
+    progress: Callable[[str, int], None] | None = None,
 ) -> BookResult:
     """Run S1..S9: PDF in, script, unit audio and master files out."""
-    script = run_script(pdf_path, config, out_dir, client_factory)
+    report = progress or (lambda _stage, _value: None)
+    script = run_script(pdf_path, config, out_dir, client_factory, progress)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
 
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
+    report("speaking", 65)
     backend = (backend_factory or create_backend)(config.tts)
     try:
         spoken = synthesize_script(
@@ -232,6 +239,7 @@ def run_book(
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
 
+    report("mastering", 90)
     master = make_master(
         out_dir,
         config.audio.formats,

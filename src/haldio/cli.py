@@ -75,6 +75,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_book(Path(args.pdf), config, out_dir)
         print(result.summary())
         return result.return_code
+    if args.command == "serve":
+        import uvicorn
+
+        from haldio.web.app import create_app
+
+        uvicorn.run(create_app(config), host=config.server.host, port=config.server.port)
+        return 0
     if args.command is None:
         parser.print_help()
         return 0

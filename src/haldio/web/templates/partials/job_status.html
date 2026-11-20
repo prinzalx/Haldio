@@ -1,0 +1,16 @@
+<div id="job-status"
+     {% if job.status in ('queued', 'extracting', 'planning', 'editing', 'verifying', 'speaking', 'mastering') %}
+     hx-get="/jobs/{{ job.id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"
+     {% endif %}>
+  <p>
+    <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
+    <progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%
+  </p>
+  {% if job.message %}<p class="muted">{{ job.message }}</p>{% endif %}
+  {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}
+  {% if files %}
+  <p>⬇ Downloads:
+    {% for f in files %}<a href="/jobs/{{ job.id }}/download/{{ f.name }}">{{ f.name }}</a> {% endfor %}
+  </p>
+  {% endif %}
+</div>
