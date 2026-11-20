@@ -23,9 +23,9 @@
       </div>
     </div>
     <input type="hidden" name="ci" value="{{ entry.ci }}">
-    <p class="actions">
+    <div class="actions">
       <button type="submit">💾 Speichern</button>
       {% if saved and saved_ci == entry.ci %}<span class="saved">Gespeichert</span>{% endif %}
-    </p>
+    </div>
   </form>
 </div>

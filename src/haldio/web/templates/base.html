@@ -4,6 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Haldio{% endblock %}</title>
+  <script>
+  // theme before first paint: saved choice wins, else the system preference
+  (function () {
+    try {
+      var t = localStorage.getItem("haldio-theme");
+      if (t) document.documentElement.dataset.theme = t;
+    } catch (err) {}
+  })();
+  </script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/vendor/htmx.min.js"></script>
@@ -13,12 +22,32 @@
     <a class="brand" href="/">🎧 Haldio</a>
     <a href="/">📚 Bücherei</a>
     <a href="/settings">⚙️ Einstellungen</a>
+    <button id="theme-switch" class="secondary" aria-label="Farbthema wechseln">🌙</button>
     <span class="ver">v{{ version | default('dev') }}</span>
   </header>
   <main>{% block content %}{% endblock %}</main>
-  <div id="toast" class="toast" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
-  // the log <details> keeps its open/closed state across HTMX swaps
+  const toastBox = document.getElementById("toast");
+  let toastTimer = null;
+  function showToast(message) {
+    toastBox.textContent = message;
+    toastBox.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastBox.classList.remove("show"), 2000);
+  }
+  const themeSwitch = document.getElementById("theme-switch");
+  const themeIsDark = () => (document.documentElement.dataset.theme
+    || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+  themeSwitch.textContent = themeIsDark() ? "☀️" : "🌙";
+  themeSwitch.addEventListener("click", () => {
+    const root = document.documentElement;
+    const next = themeIsDark() ? "light" : "dark";
+    root.dataset.theme = next;
+    try { localStorage.setItem("haldio-theme", next); } catch (err) {}
+    themeSwitch.textContent = next === "dark" ? "☀️" : "🌙";
+  });
+  // the log <details> keeps its open/closed state across any swap
   document.addEventListener("toggle", (e) => {
     const d = e.target;
     if (d.matches && d.matches("details[data-log]")) {
@@ -31,6 +60,11 @@
       try { saved = localStorage.getItem("haldio-log-" + d.dataset.log); } catch (err) {}
       if (saved !== null) d.open = saved === "open";
     });
+  });
+  // HTMX form saves answer with a polite toast
+  document.addEventListener("htmx:afterRequest", (e) => {
+    const t = e.target;
+    if (t.matches && t.matches("form[hx-post]") && e.detail.successful) showToast("Gespeichert");
   });
   // upload card: chosen file name + size, drag & drop, disable button while uploading
   (function () {

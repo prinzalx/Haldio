@@ -6,7 +6,8 @@
   <p class="muted">{{ job.file_name }} · hochgeladen {{ job.created_at | date }}
      · {{ job.page_count or "?" }} Seiten</p>
   {% include "partials/job_status.html" %}
-  <p class="actions">
+  {% include "partials/logtail.html" %}
+  <div class="actions">
     {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen</a>{% endif %}
     <button class="danger" type="button" onclick="document.getElementById('del-job').showModal()">🗑 Löschen</button>
     <dialog id="del-job">
@@ -20,6 +21,6 @@
       </form>
     </dialog>
     <a href="/">⏪ Zurück</a>
-  </p>
+  </div>
 </section>
 {% endblock %}

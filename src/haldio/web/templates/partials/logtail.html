@@ -1,0 +1,8 @@
+{% if job.logs %}
+<details class="logtail" data-log="{{ job.id }}"{% if job.status not in ('queued',
+     'extracting', 'planning', 'editing', 'verifying', 'speaking', 'mastering') %} open{% endif %}>
+  <summary>Protokoll (letzte {{ job.logs[-8:] | length }} von {{ job.logs | length }})</summary>
+  <pre>{% for line in job.logs[-8:] %}{{ line }}
+{% endfor %}</pre>
+</details>
+{% endif %}

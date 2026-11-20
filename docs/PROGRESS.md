@@ -230,3 +230,25 @@ became a time-shifted process.
   with "Gespeichert", filter "Nur Warnungen anzeigen".
 - Settings: fixed - read-only table; each test button spins while running and
   shows clear success/error/warn text next to it.
+
+## Correction 4 - section 4 Look and feel
+
+- Theme: fixed - dark default, light via prefers-color-scheme; the top bar
+  switch (🌙/☀️) overrides and is remembered in localStorage (try/catch), set
+  before first paint. All colors, spacing and radius are CSS variables.
+- Design system: fixed - one card, button (primary/secondary/danger), badge,
+  stepper, progress, toast, dialog and empty-state style set on the variables.
+- Readability: fixed - 16 px base font; light palette chosen for WCAG AA
+  contrast; visible :focus-visible outline on every control.
+- Icon buttons: fixed - every button carries a text label; the icon-only theme
+  switch has an aria-label.
+- Responsive: fixed - layouts hold from 360 px, no horizontal scroll; the
+  settings table turns into blocks below 640 px; review columns stack.
+- Markup: fixed - action rows around forms use <div>, not <p>.
+- Toast: fixed - #toast box with aria-live="polite"; HTMX saves announce
+  "Gespeichert" politely.
+- Polling: fixed - the 2 s poll swaps only the status core; the log <details>
+  lives outside the polling div, so it is never swapped while open (open state
+  additionally kept in localStorage).
+- Page frame: fixed - <title> per page, 🎧 favicon, top bar links to Bücherei
+  and Einstellungen.

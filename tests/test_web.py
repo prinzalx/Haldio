@@ -678,3 +678,24 @@ def test_worker_reports_units_and_resume_language(tmp_path) -> None:
     done = index.get(job.id)
     assert done.message == "Einheit 12 von 61"
     assert done.options["stage"] == "speaking"
+
+
+def test_theme_switch_and_toast_present(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/")
+    assert 'id="theme-switch"' in page.text
+    assert 'aria-live="polite"' in page.text
+    assert "haldio-theme" in page.text
+
+
+def test_polling_excludes_logtail(app_parts) -> None:
+    """The 2 s poll swaps only the status core; the log details stay in the page."""
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.get(location.rsplit("/", 1)[-1])
+    assert job.logs
+    partial = client.get(f"{location}/status").text
+    assert "Protokoll" not in partial
+    assert "Protokoll" in client.get(location).text

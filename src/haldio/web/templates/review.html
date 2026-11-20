@@ -15,11 +15,11 @@
     {% include "partials/review_chunk.html" %}
     {% endfor %}
   </div>
-  <p class="actions">
+  <div class="actions">
     <form method="post" action="/jobs/{{ job.id }}/speak">
       <button>🔊 Weiter zur Sprachausgabe</button>
     </form>
     <a href="/jobs/{{ job.id }}">⏪ Job</a>
-  </p>
+  </div>
 </section>
 {% endblock %}
