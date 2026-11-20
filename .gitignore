@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Local config and secrets
+.env
+config.yaml
+
+# Data directory (job data, never committed)
+data/
+
+# Documents and media (never commit real content)
+*.pdf
+*.epub
+*.docx
+*.mp3
+*.ogg
+*.opus
+*.wav
+*.m4b
+
+# Model files
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
