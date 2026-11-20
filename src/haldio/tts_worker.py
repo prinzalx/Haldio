@@ -94,14 +94,28 @@ def _run_units(model: Any, args: argparse.Namespace, torch: Any) -> int:  # noqa
     index = 0
     while index < len(pending):
         batch = pending[index : index + batch_size]
-        try:
-            wavs, sample_rate = _generate(model, args, prompt, batch)
-        except torch.cuda.OutOfMemoryError:
-            torch.cuda.empty_cache()
-            if batch_size == 1:
-                raise RuntimeError("CUDA out of memory even with batch size 1") from None
-            batch_size = max(1, batch_size // 2)
-            continue
+        retries = 0
+        while True:
+            try:
+                wavs, sample_rate = _generate(model, args, prompt, batch)
+                if len(wavs) != len(batch):
+                    # an empty or short result means the model spoke nothing for a unit
+                    raise RuntimeError(f"model returned {len(wavs)} wavs for {len(batch)} units")
+                break
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                if batch_size == 1:
+                    raise RuntimeError("CUDA out of memory even with batch size 1") from None
+                batch_size = max(1, batch_size // 2)
+            except RuntimeError as error:
+                # the model rarely emits nothing (torch: "stack expects a non-empty
+                # TensorList"); a retry on the same unit normally succeeds
+                retries += 1
+                if batch_size > 1:
+                    batch_size = max(1, batch_size // 2)
+                elif retries >= 3:
+                    raise RuntimeError(f"unit {batch[0]['hash']}: {error}") from None
+            batch = pending[index : index + batch_size]
         for unit, wav in zip(batch, wavs, strict=False):
             sf.write(out_dir / f"{unit['hash']}.wav", wav, sample_rate)
             done += 1
@@ -170,7 +184,10 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("batch mode needs --units and --out-dir")
         return _run_units(model, args, torch)
     except Exception as error:  # noqa: BLE001 - report every failure as one protocol line
-        _emit({"error": str(error)})
+        import traceback
+
+        trace = traceback.format_exc().strip().splitlines()
+        _emit({"error": f"{error} | {' <- '.join(trace[-3:])}"})
         return 1
 
 
