@@ -252,6 +252,26 @@ def test_unknown_job_is_404(app_parts) -> None:
     assert client.get("/jobs/nope").status_code == 404
 
 
+def test_failure_message_is_short_and_detail_holds_traceback(tmp_path) -> None:
+    config = Config()
+    config.paths.data_dir = tmp_path
+    index = JobIndex(tmp_path / "data")
+
+    def bad_run(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        if progress:
+            progress("speaking", 70)
+        raise RuntimeError("unit abc123: empty audio")
+
+    job = index.create("x.pdf")
+    worker = Worker(index, config, run_fn=bad_run, inline=True)
+    worker.enqueue(job.id)
+    done = index.get(job.id)
+    assert done.status == "failed"
+    assert done.message == "Sprachausgabe fehlgeschlagen."
+    assert "Traceback" in done.error_detail
+    assert "empty audio" in done.error
+
+
 def test_worker_cancel_queued_job(tmp_path) -> None:
     config = Config()
     index = JobIndex(tmp_path / "data")

@@ -17,6 +17,14 @@ from haldio.tts.base import ModelGuardError
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
 _LOG_TAIL = 30
+_STAGE_LABELS = {
+    "extracting": "Einlesen",
+    "planning": "Planen",
+    "editing": "Redigieren",
+    "verifying": "Prüfen",
+    "speaking": "Sprachausgabe",
+    "mastering": "Mastern",
+}
 
 
 class _Cancelled(Exception):
@@ -194,6 +202,11 @@ class Worker:
                 job.error = result.script.error or result.speak.error or result.master.error
                 if job.status == "done":
                     job.audio_seconds = int(result.speak.total_seconds)
+                    if result.speak.failed_units:
+                        job.message = (
+                            f"{len(result.speak.failed_units)} von {len(result.speak.units)} "
+                            "Einheiten konnten nicht gesprochen werden (Stille eingesetzt)."
+                        )
             self.index.update(job)
         except _Cancelled:
             job.status = "cancelled"
@@ -206,9 +219,11 @@ class Worker:
             self._log(job, f"model guard: {error}")
             self.index.update(job)
         except Exception as error:  # noqa: BLE001 - a job failure must not kill the thread
+            stage_label = _STAGE_LABELS.get(job.status, job.status)
             job.status = "failed"
             job.error = str(error)
-            job.message = traceback.format_exc(limit=1).strip()
+            job.error_detail = traceback.format_exc(limit=8).strip()
+            job.message = f"{stage_label} fehlgeschlagen."
             self.index.update(job)
 
 

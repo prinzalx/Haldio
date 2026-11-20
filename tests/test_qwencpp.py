@@ -8,6 +8,7 @@ import wave
 from pathlib import Path
 
 import httpx
+import pytest
 
 from haldio.config import TtsConfig
 from haldio.tts.base import TTSParams
@@ -99,19 +100,34 @@ def test_synthesize_batch_retries_empty_generation(tmp_path: Path) -> None:
     assert state["calls"] == 2
 
 
-def test_synthesize_batch_gives_up_with_unit_hash(tmp_path: Path) -> None:
+def test_failed_unit_becomes_silence_not_job_failure(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="generation failed")
 
     backend = _backend(handler)
-    try:
-        backend.synthesize_batch(
-            [("Text.", tmp_path / "abc123.wav")], "de", TTSParams(voice="dylan")
-        )
-    except RuntimeError as error:
-        assert "unit abc123" in str(error)
-    else:
-        raise AssertionError("RuntimeError expected")
+    durations = backend.synthesize_batch(
+        [("Text.", tmp_path / "u.wav")], "de", TTSParams(voice="dylan")
+    )
+    assert durations == [0.5]
+    assert backend.failed_units == ["u"]
+    assert (tmp_path / "u.wav").stat().st_size > 44
+
+
+def test_dead_server_stops_the_stage(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="connection refused")
+
+    backend = _backend(handler)
+
+    class DeadProc:
+        returncode = 1
+
+        def poll(self) -> int:
+            return 1
+
+    backend._proc = DeadProc()  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="tts-server crashed"):
+        backend.synthesize_batch([("Text.", tmp_path / "u.wav")], "de", TTSParams(voice="dylan"))
 
 
 def test_cache_variant_reports_model_file() -> None:

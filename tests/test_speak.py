@@ -25,6 +25,16 @@ def test_split_units_breaks_long_sentence_at_comma() -> None:
     assert len(units) > 1
 
 
+def test_letterless_units_merge_into_previous() -> None:
+    from haldio.pipeline.speak import _merge_letterless_units
+
+    assert _merge_letterless_units(["Erster Satz.", "—", "•", "Zweiter Satz."]) == [
+        "Erster Satz. — •",
+        "Zweiter Satz.",
+    ]
+    assert _merge_letterless_units(["—", "Nur ein Satz."]) == ["Nur ein Satz."]
+
+
 def test_normalizer_expands_decimals_and_numbers() -> None:
     out = make_speakable("Der Wert betraegt 3,3 Volt und 42 Stueck.", "de")
     assert "drei Komma drei" in out

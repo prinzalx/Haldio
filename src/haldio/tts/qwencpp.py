@@ -40,6 +40,8 @@ _LANG_NAMES = {
 }
 
 _MAX_ATTEMPTS = 3
+_SILENCE_SECONDS = 0.5
+_SAMPLE_RATE = 24000
 
 
 def language_name(code: str) -> str:
@@ -55,6 +57,7 @@ class QwenCppBackend(TTSBackend):
         self._client = client
         self._proc: subprocess.Popen[bytes] | None = None
         self._log = None
+        self.failed_units: list[str] = []
 
     # -- server lifecycle -------------------------------------------------
 
@@ -146,16 +149,26 @@ class QwenCppBackend(TTSBackend):
         params: TTSParams,
         progress: Callable[[int, int], None] | None = None,
     ) -> list[float]:
-        """Synthesize all items against one server; retry empty generations."""
+        """Synthesize all items against one server; retry empty generations.
+
+        A unit that still fails after the retries becomes 500 ms of silence
+        and is listed in self.failed_units; a dead server stops the stage.
+        """
         self._ensure_server()
+        self.failed_units = []
         durations: list[float] = []
         for index, (text, path) in enumerate(items, start=1):
             for attempt in range(1, _MAX_ATTEMPTS + 1):
                 try:
                     audio = self.synthesize(text, language, params)
                 except RuntimeError as error:
+                    if self._proc is not None and self._proc.poll() is not None:
+                        raise RuntimeError(f"tts-server crashed: {error}") from error
                     if attempt == _MAX_ATTEMPTS:
-                        raise RuntimeError(f"unit {path.stem}: {error}") from error
+                        print(f"unit {path.stem} failed: {error} | text: {text[:60]}")
+                        self.failed_units.append(path.stem)
+                        path.write_bytes(_silence_wav())
+                        durations.append(_SILENCE_SECONDS)
                     continue
                 path.write_bytes(audio.data)
                 durations.append(audio.duration_seconds)
@@ -176,6 +189,17 @@ class QwenCppBackend(TTSBackend):
     def cache_variant(self) -> str:
         """Model identification for the unit cache key (file name embeds the quant)."""
         return Path(self._config.qwencpp_model).name
+
+
+def _silence_wav() -> bytes:
+    """A short mono 16-bit silence used when one unit fails for good."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(_SAMPLE_RATE)
+        handle.writeframes(b"\x00\x00" * int(_SAMPLE_RATE * _SILENCE_SECONDS))
+    return buf.getvalue()
 
 
 def _wav_duration(data: bytes) -> float:

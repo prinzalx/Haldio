@@ -39,6 +39,19 @@ def unit_cache_key(text: str, voice: str, backend: str, model: str = "") -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def _merge_letterless_units(pieces: list[str]) -> list[str]:
+    """Drop units without letters or digits (for example "—" or "•") into the
+    previous unit so the TTS engine never sees a symbol-only request."""
+    out: list[str] = []
+    for piece in pieces:
+        if not any(ch.isalnum() for ch in piece):
+            if out:
+                out[-1] = f"{out[-1]} {piece}".strip()
+            continue
+        out.append(piece)
+    return out
+
+
 @dataclass
 class SpeakResult:
     """Outcome of stage S8."""
@@ -47,6 +60,7 @@ class SpeakResult:
     synthesized: int = 0
     cached: int = 0
     total_seconds: float = 0.0
+    failed_units: list[str] = field(default_factory=list)
     error: str = ""
 
     @property
@@ -73,7 +87,9 @@ def synthesize_script(
     for chunk in script_data.get("chunks", []):
         for block in chunk.get("blocks", []):
             spoken = make_speakable(block.get("text", ""), language, pronunciations)
-            for piece in split_units(spoken, tts_config.max_chars_per_unit):
+            for piece in _merge_letterless_units(
+                split_units(spoken, tts_config.max_chars_per_unit)
+            ):
                 key = unit_cache_key(
                     piece, tts_config.speaker, backend_name, backend.cache_variant()
                 )
@@ -98,6 +114,11 @@ def synthesize_script(
         durations = backend.synthesize_batch(pending, language, params, progress)
         result.synthesized = len(pending)
         result.total_seconds = sum(durations)
+        failed = set(getattr(backend, "failed_units", []))
+        result.failed_units = sorted(failed)
+        for unit in result.units:
+            if unit["hash"] in failed:
+                unit["failed"] = True
     (out_dir / "05_speak" / "units.json").write_text(
         json.dumps({"units": result.units}, ensure_ascii=False, indent=2), encoding="utf-8"
     )

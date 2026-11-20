@@ -180,3 +180,15 @@ became a time-shifted process.
 - HTML escaping: fixed - test results escaped, templates auto-escape.
 - CSRF: fixed - Origin/Referer host check on POST (403 for foreign origins).
 - htmx: fixed - vendored to `static/vendor/htmx.min.js`, UI works offline.
+
+## Correction 4 - section 2 Worker errors
+
+- Letterless units: fixed - units without letters or digits are merged into the
+  previous unit (leading ones dropped) before synthesis.
+- Unit failure: fixed - after the 3 retries a unit becomes 500 ms silence, its id
+  and text are printed, it is flagged in units.json (`"failed": true`) and listed in
+  SpeakResult.failed_units; the job still finishes and the message reports the count.
+  A dead tts-server stops the stage with "tts-server crashed". Finished units stay
+  in the cache, so "Weiter" continues from the cache (was already true).
+- message vs error_detail: fixed - Job gained `error_detail` (traceback, log/API
+  only); the UI message is one short German sentence ("Sprachausgabe fehlgeschlagen.").

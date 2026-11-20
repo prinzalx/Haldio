@@ -47,6 +47,7 @@ class Job:
     page_count: int = 0
     audio_seconds: int = 0
     error: str = ""
+    error_detail: str = ""
     logs: list[str] = field(default_factory=list)
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -63,6 +64,7 @@ class Job:
             "page_count": self.page_count,
             "audio_seconds": self.audio_seconds,
             "error": self.error,
+            "error_detail": self.error_detail,
             "logs": self.logs,
             "options": self.options,
         }
