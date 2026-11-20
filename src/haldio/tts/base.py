@@ -75,6 +75,10 @@ class TTSBackend(ABC):
                 progress(index, len(items))
         return durations
 
+    def cache_variant(self) -> str:
+        """Model identification included in the unit cache key (empty = engine only)."""
+        return ""
+
     def healthcheck(self) -> tuple[bool, str]:
         """Return (ok, message) for the settings page."""
         try:

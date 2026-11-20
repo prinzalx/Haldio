@@ -33,8 +33,9 @@ def split_units(text: str, max_chars: int) -> list[str]:
     return units
 
 
-def unit_cache_key(text: str, voice: str, backend: str) -> str:
-    blob = f"{text}|{voice}|{backend}"
+def unit_cache_key(text: str, voice: str, backend: str, model: str = "") -> str:
+    """Cache key over text, voice, backend and model file (name embeds the quant)."""
+    blob = f"{text}|{voice}|{backend}|{model}"
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
@@ -73,7 +74,9 @@ def synthesize_script(
         for block in chunk.get("blocks", []):
             spoken = make_speakable(block.get("text", ""), language, pronunciations)
             for piece in split_units(spoken, tts_config.max_chars_per_unit):
-                key = unit_cache_key(piece, tts_config.speaker, backend_name)
+                key = unit_cache_key(
+                    piece, tts_config.speaker, backend_name, backend.cache_variant()
+                )
                 path = units_dir / f"{key}.wav"
                 result.units.append(
                     {

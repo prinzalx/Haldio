@@ -76,6 +76,13 @@ def test_unit_cache_key_changes_with_voice() -> None:
     assert unit_cache_key("text", "a", "mock") != unit_cache_key("text", "b", "mock")
 
 
+def test_unit_cache_key_changes_with_backend_and_model() -> None:
+    assert unit_cache_key("text", "a", "qwencpp") != unit_cache_key("text", "a", "qwen_local")
+    assert unit_cache_key("text", "a", "qwencpp", "m-Q8_0.gguf") != unit_cache_key(
+        "text", "a", "qwencpp", "m-Q4_K.gguf"
+    )
+
+
 def test_master_needs_units_file(tmp_path) -> None:
     from haldio.pipeline.master import make_master
 

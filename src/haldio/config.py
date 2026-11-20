@@ -23,10 +23,11 @@ class LlmConfig(BaseModel):
 
 
 class TtsConfig(BaseModel):
-    """Local Qwen3-TTS backend (worker subprocess) or mock."""
+    """TTS engine selection: qwentts.cpp server (default), mock, or the
+    deprecated PyTorch qwen_local worker."""
 
-    backend: Literal["mock", "qwen_local"] = "mock"
-    mode: Literal["clone", "custom_voice"] = "clone"
+    backend: Literal["mock", "qwen_local", "qwencpp"] = "mock"
+    mode: Literal["clone", "custom_voice"] = "custom_voice"
     model_id: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     model_path: str = ""
     worker_python: str = ""
@@ -40,6 +41,13 @@ class TtsConfig(BaseModel):
     max_chars_per_unit: int = 400
     batch_size: int = 1
     confirm_before_start: bool = True
+    # qwencpp backend: local tts-server process (qwentts.cpp, Vulkan build)
+    qwencpp_server: str = "../_tools/qwentts.cpp/build/Release/tts-server.exe"
+    qwencpp_model: str = "../_tools/qwentts.cpp/models/qwen-talker-1.7b-customvoice-Q8_0.gguf"
+    qwencpp_codec: str = "../_tools/qwentts.cpp/models/qwen-tokenizer-12hz-Q8_0.gguf"
+    qwencpp_device: str = ""
+    qwencpp_port: int = 8111
+    qwencpp_startup_timeout: int = 300
 
 
 class EditorConfig(BaseModel):

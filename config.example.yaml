@@ -9,12 +9,12 @@ llm:
   timeout_s: 600
   strip_thinking: true
 tts:
-  backend: mock          # mock | qwen_local
-  mode: clone            # clone | custom_voice
-  model_id: Qwen/Qwen3-TTS-12Hz-1.7B-Base
-  model_path: ""         # optional local folder
-  worker_python: ""      # empty = same interpreter
-  device: auto           # auto | cuda:0 | cpu
+  backend: mock          # mock | qwencpp | qwen_local (deprecated)
+  mode: custom_voice     # custom_voice | clone (clone = qwen_local only)
+  model_id: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+  model_path: ""         # optional local folder (qwen_local only)
+  worker_python: ""      # empty = same interpreter (qwen_local only)
+  device: auto           # auto | cuda:0 | cpu (qwen_local only)
   dtype: bfloat16
   language: auto
   speaker: ""            # custom_voice only
@@ -24,6 +24,12 @@ tts:
   max_chars_per_unit: 400
   batch_size: 1
   confirm_before_start: true   # web jobs pause before TTS until you confirm
+  qwencpp_server: "../_tools/qwentts.cpp/build/Release/tts-server.exe"
+  qwencpp_model: "../_tools/qwentts.cpp/models/qwen-talker-1.7b-customvoice-Q8_0.gguf"
+  qwencpp_codec: "../_tools/qwentts.cpp/models/qwen-tokenizer-12hz-Q8_0.gguf"
+  qwencpp_device: ""     # empty = server default (best device); e.g. Vulkan0
+  qwencpp_port: 8111     # 8080 is used by LM Studio on this machine
+  qwencpp_startup_timeout: 300
 editor:
   prompt_version: v1
   fidelity_check: true
