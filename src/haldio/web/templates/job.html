@@ -5,6 +5,7 @@
   <h1>📄 {{ job.file_name }}</h1>
   {% include "partials/job_status.html" %}
   <p class="actions">
+    <a href="/jobs/{{ job.id }}/review">📝 Skript prüfen</a>
     <form method="post" action="/jobs/{{ job.id }}/cancel">
       <button>Abbrechen</button>
     </form>

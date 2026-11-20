@@ -187,6 +187,7 @@ class BookResult:
     script: ScriptResult
     speak: SpeakResult
     master: MasterResult
+    review_paused: bool = False
 
     @property
     def return_code(self) -> int:
@@ -214,12 +215,15 @@ def run_book(
     backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
     pronunciations_path: Path | None = None,
     progress: Callable[[str, int], None] | None = None,
+    stop_after_script: bool = False,
 ) -> BookResult:
     """Run S1..S9: PDF in, script, unit audio and master files out."""
     report = progress or (lambda _stage, _value: None)
     script = run_script(pdf_path, config, out_dir, client_factory, progress)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
+    if stop_after_script:
+        return BookResult(script, SpeakResult(), MasterResult(), review_paused=True)
 
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
@@ -239,6 +243,44 @@ def run_book(
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
 
+    report("mastering", 90)
+    master = make_master(
+        out_dir,
+        config.audio.formats,
+        config.audio.pause_ms.model_dump(),
+        config.audio.mp3_bitrate_kbps,
+    )
+    return BookResult(script, spoken, master)
+
+
+def run_speech(
+    out_dir: Path,
+    config: Config,
+    language: str,
+    backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
+    pronunciations_path: Path | None = None,
+    progress: Callable[[str, int], None] | None = None,
+) -> BookResult:
+    """Run only S8 and S9 for a job whose script.json already exists (after review)."""
+    report = progress or (lambda _stage, _value: None)
+    script = ScriptResult(out_dir=out_dir, chunks=0, language=language)
+    data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
+    report("speaking", 65)
+    backend = (backend_factory or create_backend)(config.tts)
+    try:
+        spoken = synthesize_script(
+            data,
+            backend,
+            config.tts.backend,
+            config.tts,
+            out_dir,
+            language,
+            load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
+        )
+    finally:
+        backend.close()
+    if not spoken.ok:
+        return BookResult(script, spoken, MasterResult(error=spoken.error))
     report("mastering", 90)
     master = make_master(
         out_dir,

@@ -74,18 +74,47 @@
 - Example `pronunciations.yaml` added; `tts.model` config key added.
 - Tests: 50 pass, 1 skip (ffmpeg), mock LLM + MockTTS end to end.
 
-## Next — M4 web
+## Done — M4 web (2026-11-20)
 
-1. Job index (`jobs/index.py` exists) + worker thread (resume, cancel, FIFO).
-2. Web UI in German: library page, job page with stages and downloads, delete.
-3. `hoerbuch serve`, Jinja2 + HTMX on port 8505.
+- `jobs/worker.py`: FIFO worker thread, cancel between chunks/stages, crashed
+  jobs are re-queued on startup; progress callback updates stage + percent.
+- Web UI (German, FastAPI + Jinja2 + HTMX): library page with upload and job
+  list, job page with 2 s status polling, downloads, cancel, delete.
+- `hoerbuch serve` on 127.0.0.1:8505; live smoke test with the real LLM passed
+  (job ran S1-S8; only the master stage asked for ffmpeg).
+- Tests: 57 pass, 1 skip (ffmpeg).
+
+## Done — M5 polish / release candidate (2026-11-20)
+
+- Review page `/jobs/<id>/review`: script by chunk, warnings highlighted,
+  editable text areas, "Weiter zur Sprachausgabe" resumes at S8 (`run_speech`).
+- `review_before_tts` config option stops the worker at `awaiting_review` (60%).
+- Settings page `/settings`: effective config read-only + "Test LM Studio" and
+  "Test TTS" buttons (model list / voice list or a clear error).
+- README rewritten: pipeline, install, run, config, tests, eval set.
+- Clean-clone test passed: fresh clone -> `uv sync --extra dev` -> 57 tests pass.
+- Tests: 61 pass, 1 skip (ffmpeg).
+
+## Release candidate
+
+Tag `v0.1.0-rc1`, GitHub release created.
+
+## Known limitations
+
+- ffmpeg must be installed by the user (S9 asks politely if it is missing).
+- The TTS server was not running yet; `qwen3` backend uses the OpenAI-compatible
+  `/audio/speech` contract — verify voices when the server is up.
+- Cancel takes effect between chunks/stages, not mid-request.
+- Screenshots in the README need the running UI (skipped in headless tests).
+
+## Next
+
+- User feedback on the RC with a real PDF; then 0.1.0 final.
 
 ## Open questions
 
 None blocking.
 
-1. **Qwen3-TTS details** (voices, max characters per call, output sample rate). Default:
-   I ask again in M3, before writing `QwenTTSBackend`. MockTTS covers the pipeline until then.
-2. **Python 3.14 and PyMuPDF wheels.** Default: if no 3.14 wheel exists, I pin the project
-   to 3.12 with `uv python pin 3.12`.
-3. **Review-before-speech default.** Default: off (`review_before_tts: false`), as in the brief.
+1. **Qwen3-TTS details** (voices, max characters per call, output sample rate):
+   `QwenTTSBackend` uses the OpenAI-compatible contract; confirm when the server runs.
+2. **Review-before-speech default.** Off (`review_before_tts: false`), as in the brief.

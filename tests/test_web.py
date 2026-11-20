@@ -34,7 +34,7 @@ def app_parts(tmp_path):
     index = JobIndex(tmp_path / "data")
     calls: list[str] = []
 
-    def run_fn(pdf_path, cfg, out_dir, progress=None):
+    def run_fn(pdf_path, cfg, out_dir, progress=None, stop_after_script=False):
         calls.append(str(pdf_path))
         if progress:
             progress("editing", 30)
@@ -117,9 +117,73 @@ def test_worker_cancel_queued_job(tmp_path) -> None:
     index = JobIndex(tmp_path / "data")
     job = index.create("x.pdf")
 
-    def never_run(pdf_path, cfg, out_dir, progress=None):  # pragma: no cover
+    def never_run(pdf_path, cfg, out_dir, progress=None, **kwargs):  # pragma: no cover
         raise AssertionError("must not run")
 
     worker = Worker(index, config, run_fn=never_run, inline=False)
     worker.cancel(job.id)
     assert index.get(job.id).status == "cancelled"
+
+
+def test_settings_page_shows_endpoints(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings")
+    assert page.status_code == 200
+    assert "Einstellungen" in page.text
+    assert "Test LM Studio" in page.text
+
+
+def test_settings_test_tts_mock(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    response = client.get("/settings/test-tts")
+    assert response.status_code == 200
+    assert "TTS ok" in response.text
+
+
+def test_review_page_and_edit(app_parts, tmp_path) -> None:
+    import json
+
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    script_file = index.jobs_dir / job_id / "04_script" / "script.json"
+    script_file.parent.mkdir(parents=True, exist_ok=True)
+    script_file.write_text(
+        json.dumps(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "c0001",
+                        "blocks": [{"kind": "paragraph", "text": "Alter Text."}],
+                        "warnings": [],
+                        "needs_review": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    page = client.get(f"/jobs/{job_id}/review")
+    assert page.status_code == 200
+    assert "Alter Text." in page.text
+    response = client.post(
+        f"/jobs/{job_id}/review", data={"c0b0": "Neuer Text."}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    saved = json.loads(script_file.read_text(encoding="utf-8"))
+    assert saved["chunks"][0]["blocks"][0]["text"] == "Neuer Text."
+
+
+def test_speak_now_sets_resume_option(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    response = client.post(f"/jobs/{job_id}/speak", follow_redirects=False)
+    # the inline worker re-ran immediately (fake pipeline); the option was set first
+    assert response.status_code == 303
+    job = index.get(job_id)
+    assert job.options.get("resume_from") == "speaking"

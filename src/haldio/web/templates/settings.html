@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Haldio — Einstellungen{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>⚙️ Einstellungen</h1>
+  <table class="jobs">
+    <tr><th>LLM (Editor)</th><td>{{ config.llm.base_url }} · Modell {{ config.llm.model }}</td>
+        <td><button hx-get="/settings/test-llm" hx-target="#llm-test">Test LM Studio</button>
+        <span id="llm-test"></span></td></tr>
+    <tr><th>TTS (Sprecher)</th>
+        <td>{{ config.tts.base_url }} · Backend {{ config.tts.backend }} · Stimme {{ config.tts.voice or "(Standard)" }}</td>
+        <td><button hx-get="/settings/test-tts" hx-target="#tts-test">Test TTS</button>
+        <span id="tts-test"></span></td></tr>
+    <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>
+    <tr><th>Server</th><td>{{ config.server.host }}:{{ config.server.port }}</td><td></td></tr>
+  </table>
+  <p class="muted">Die Einstellungen kommen aus <code>config.yaml</code> (siehe <code>config.example.yaml</code>).</p>
+</section>
+{% endblock %}

@@ -11,7 +11,7 @@ from typing import Any
 
 from haldio.config import Config
 from haldio.jobs.index import JobIndex
-from haldio.pipeline.run import BookResult, run_book
+from haldio.pipeline.run import BookResult, run_book, run_speech
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
 
@@ -99,19 +99,30 @@ class Worker:
             self.index.update(job)
 
         try:
-            result = self._run_fn(
-                self.index.jobs_dir / job_id / "source.pdf",
-                self.config,
-                self.index.jobs_dir / job_id,
-                progress=progress,
-            )
+            folder = self.index.jobs_dir / job_id
+            if job.options.get("resume_from") == "speaking":
+                language = job.language if job.language in ("de", "en") else "de"
+                result = run_speech(folder, self.config, language, progress=progress)
+            else:
+                result = self._run_fn(
+                    folder / "source.pdf",
+                    self.config,
+                    folder,
+                    progress=progress,
+                    stop_after_script=self.config.editor.review_before_tts,
+                )
             if job_id in self._cancelled:
                 raise _Cancelled()
-            job.status = "done" if result.return_code == 0 else "failed"
-            job.progress = 100 if result.return_code == 0 else job.progress
-            job.error = result.script.error or result.speak.error or result.master.error
-            if job.status == "done":
-                job.audio_seconds = int(result.speak.total_seconds)
+            if result.review_paused:
+                job.status = "awaiting_review"
+                job.progress = 60
+                job.error = ""
+            else:
+                job.status = "done" if result.return_code == 0 else "failed"
+                job.progress = 100 if result.return_code == 0 else job.progress
+                job.error = result.script.error or result.speak.error or result.master.error
+                if job.status == "done":
+                    job.audio_seconds = int(result.speak.total_seconds)
             self.index.update(job)
         except _Cancelled:
             job.status = "cancelled"

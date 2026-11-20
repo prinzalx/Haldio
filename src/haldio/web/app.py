@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -41,8 +42,8 @@ def create_app(
 
     @app.post("/upload")
     async def upload(
-        file: UploadFile = File(...),
-        voice: str = Form(""),  # noqa: B008 - FastAPI pattern
+        file: UploadFile = File(...),  # noqa: B008 - FastAPI pattern
+        voice: str = Form(""),
     ) -> RedirectResponse:
         name = file.filename or "upload.pdf"
         if not name.lower().endswith(".pdf"):
@@ -87,6 +88,70 @@ def create_app(
                 return FileResponse(path, filename=f"{job_id}-{file_name}")
         raise HTTPException(status_code=404, detail="Datei noch nicht erzeugt.")
 
+    @app.get("/jobs/{job_id}/review", response_class=HTMLResponse)
+    def review_page(request: Request, job_id: str) -> HTMLResponse:
+        job = _require_job(app.state.index, job_id)
+        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
+        chunks = _load_chunks(script_file)
+        return templates.TemplateResponse(request, "review.html", {"job": job, "chunks": chunks})
+
+    @app.post("/jobs/{job_id}/review")
+    async def review_save(job_id: str, request: Request) -> RedirectResponse:
+        _require_job(app.state.index, job_id)
+        form = await request.form()
+        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
+        chunks = _load_chunks(script_file)
+        for ci, chunk in enumerate(chunks):
+            for bi, block in enumerate(chunk.get("blocks", [])):
+                key = f"c{ci}b{bi}"
+                if key in form:
+                    block["text"] = str(form[key]).strip()
+        _store_chunks(script_file, chunks)
+        return RedirectResponse(f"/jobs/{job_id}/review", status_code=303)
+
+    @app.post("/jobs/{job_id}/speak")
+    def speak_now(job_id: str) -> RedirectResponse:
+        job = _require_job(app.state.index, job_id)
+        job.options["resume_from"] = "speaking"
+        app.state.index.update(job)
+        app.state.worker.enqueue(job_id)
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request, "settings.html", {"config": config, "llm_result": "", "tts_result": ""}
+        )
+
+    @app.get("/settings/test-llm", response_class=HTMLResponse)
+    def test_llm() -> HTMLResponse:
+        from haldio.llm.client import LlmClient, LlmError
+
+        try:
+            client = LlmClient(config.llm)
+            models = ", ".join(client.list_models()[:10])
+            client.close()
+            text = f"LM Studio ok: {models or 'keine Modelle'}"
+        except LlmError as error:
+            text = f"Fehler: {error}"
+        except Exception as error:  # noqa: BLE001 - show any connection error in the UI
+            text = f"Fehler: {error}"
+        return HTMLResponse(f"<span>{text}</span>")
+
+    @app.get("/settings/test-tts", response_class=HTMLResponse)
+    def test_tts() -> HTMLResponse:
+        from haldio.tts import create_backend
+
+        backend = create_backend(config.tts)
+        try:
+            ok, message = backend.healthcheck()
+            if ok:
+                names = ", ".join(v.name or v.id for v in backend.list_voices()[:10])
+                message = f"TTS ok: {names or 'keine Stimmen'}"
+        finally:
+            backend.close()
+        return HTMLResponse(f"<span>{message}</span>")
+
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str) -> RedirectResponse:
         _require_job(app.state.index, job_id)
@@ -124,6 +189,17 @@ def _job_files(job: Job) -> list[dict[str, Any]]:
     if job.status != "done":
         return []
     return [{"name": name, "available": True} for name in _DOWNLOADABLE]
+
+
+def _load_chunks(script_file: Path) -> list[dict[str, Any]]:
+    if not script_file.is_file():
+        return []
+    return list(json.loads(script_file.read_text(encoding="utf-8")).get("chunks", []))
+
+
+def _store_chunks(script_file: Path, chunks: list[dict[str, Any]]) -> None:
+    data = {"chunks": chunks, "warnings": [w for c in chunks for w in c.get("warnings", [])]}
+    script_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _format_seconds(value: float | int) -> str:
