@@ -33,14 +33,26 @@
 - Note: `fitz` is deprecated in PyMuPDF 2.1 — use `import pymupdf`. PyMuPDF has wheels
   for Python 3.14, so no version pin was needed.
 
-## Next — M2 editor
+## Done — M2 editor (2026-11-20)
 
-1. LM Studio client (`llm/`): chat call, `response_format` json_schema with text
-   fallback, `<think>` stripping, model listing.
-2. S3 Plan: `doc_map.json` — chapter tree, reference index, protected terms, summary.
-3. S4 Chunk: structure-first splitting, max 1500 tokens, per-chunk context.
-4. S5 Edit + S6 Verify + S7 Assemble, QA report.
-5. CLI `hoerbuch script <pdf> -o <dir>`; editor eval set.
+- `llm/client.py` (httpx): chat completions, json_schema with text fallback, model list.
+- `pipeline/chunk.py` (S4): section-first splitting, max token limit, never inside
+  table/code/formula, protected terms and resolved references per chunk.
+- `pipeline/editor_output.py`: output schema (blocks + warnings + unresolved refs).
+- `pipeline/edit.py` (S5): load prompt, build user message (context + source), parse
+  editor result, abbreviation expansion, cache key.
+- `pipeline/verify.py` (S6): protected terms check, digits check (warning), length
+  ratio warning, leftover markup check.
+- `pipeline/assemble.py` (S7): `script.md`, `script.json`, QA report (HTML).
+- `pipeline/run.py`: full S1→S7 pipeline, `hoerbuch script <pdf> -o <dir>`.
+- Tests: 43 pass; mock client tests; verify tests; chunk tests.
+
+## Next — M3 speech
+
+1. `tts/base.py` (TTSBackend interface), `tts/mock.py` (MockTTSBackend).
+2. `tts/normalizer.py` (num2words, identifier speakable, pronunciations.yaml).
+3. `pipeline/speak.py` (S8) and `pipeline/master.py` (S9).
+4. CLI `hoerbuch run <pdf>`, `QwenTTSBackend` after user confirms Qwen3-TTS setup.
 
 ## Open questions
 

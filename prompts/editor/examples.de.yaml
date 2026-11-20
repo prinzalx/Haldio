@@ -1,0 +1,27 @@
+# Few-shot examples for the editor prompt (German), version v1.
+# Each case: source blocks (JSON) and the expected spoken blocks.
+# Add more examples when tests/eval/editor_cases.yaml shows a weak point.
+
+- name: table
+  source: |
+    [{"type": "table", "text": "Tabelle 2: Betriebsarten", "cells": [["Betriebsart", "Max. Strom", "Spannung"], ["Standby", "0,5 mA", "3,3 V"], ["Aktiv", "120 mA", "3,3 V"]]}]
+  output: |
+    {"blocks": [{"kind": "paragraph", "text": "Tabelle zwei nennt den maximalen Strom und die Spannung für zwei Betriebsarten. Im Standby beträgt der maximale Strom 0,5 Milliampere bei 3,3 Volt. In der Betriebsart Aktiv beträgt der maximale Strom 120 Milliampere, ebenfalls bei 3,3 Volt."}], "warnings": [], "unresolved_references": []}
+
+- name: list
+  source: |
+    [{"type": "list", "text": "Vor dem Start prüfen Sie: - die Versorgungsspannung - die Kabelverbindung - den Zustand der Sicherung"}]
+  output: |
+    {"blocks": [{"kind": "paragraph", "text": "Vor dem Start prüfen Sie drei Dinge: erstens die Versorgungsspannung, zweitens die Kabelverbindung und drittens den Zustand der Sicherung."}], "warnings": [], "unresolved_references": []}
+
+- name: reference
+  source: |
+    [{"type": "paragraph", "text": "Die Grenzwerte stehen in Tabelle 3 (siehe Abschnitt 4.2, Seite 17)."}]
+  output: |
+    {"blocks": [{"kind": "paragraph", "text": "Die Grenzwerte stehen in Tabelle drei, Grenzwerte der Schnittstelle. Sie ist im Abschnitt vier Punkt zwei beschrieben, Konfiguration der Schnittstellen."}], "warnings": [], "unresolved_references": []}
+
+- name: formula
+  source: |
+    [{"type": "paragraph", "text": "Die Leistung folgt aus P = U · I. Bei U = 3,3 V und I = 120 mA gilt P ≈ 0,4 W."}]
+  output: |
+    {"blocks": [{"kind": "paragraph", "text": "Die Leistung folgt aus P gleich U mal I. Bei U gleich 3,3 Volt und I gleich 120 Milliampere gilt P ungefähr 0,4 Watt."}], "warnings": [], "unresolved_references": []}

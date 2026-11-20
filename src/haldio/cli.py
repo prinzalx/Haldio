@@ -8,6 +8,7 @@ from pathlib import Path
 
 from haldio import __version__
 from haldio.config import load_config
+from haldio.pipeline.run import run_script
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +64,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = load_config(Path(args.config) if args.config else None)
     if args.command == "inspect":
         return _inspect(args)
+    if args.command == "script":
+        out_dir = Path(args.out) if args.out else Path(".")
+        result = run_script(Path(args.pdf), config, out_dir)
+        print(result.summary())
+        return result.return_code
     if args.command is None:
         parser.print_help()
         return 0
