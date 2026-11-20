@@ -141,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", default="", help="directory for <hash>.wav files")
     parser.add_argument("--check", action="store_true", help="report voices, write one test WAV")
     parser.add_argument("--pull", action="store_true", help="download model weights once")
+    parser.add_argument("--dest", default="", help="pull-mode target directory")
     parser.add_argument("--text", default="", help="check-mode sentence")
     parser.add_argument("--out", default="tts-check.wav", help="check-mode output file")
     parser.add_argument("--model-id", default="")
