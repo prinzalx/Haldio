@@ -45,7 +45,17 @@
   ratio warning, leftover markup check.
 - `pipeline/assemble.py` (S7): `script.md`, `script.json`, QA report (HTML).
 - `pipeline/run.py`: full S1→S7 pipeline, `hoerbuch script <pdf> -o <dir>`.
-- Tests: 43 pass; mock client tests; verify tests; chunk tests.
+- Eval set: `tests/eval/editor_cases.yaml` (15 cases) + `scripts/eval_editor.py`
+  (runs the cases against the live LM Studio, prints pass/fail per rule).
+- Live-run hardening: `parse_editor_result` rejects a JSON object without a
+  "blocks" key (Pydantic defaults had hidden a wrong-shaped `{"script": ...}`
+  answer as valid-but-empty); an empty `blocks` array triggers the retry loop;
+  few-shot examples are appended to the system prompt so the model keeps the
+  JSON shape and the decimal commas.
+- Column fix: the gutter is now computed from narrow (column-width) lines only,
+  and full-width lines end a column zone — a heading above two columns no
+  longer hid the gap and y-sorted the column lines into each other.
+- Tests: 41 pass; mock client tests; verify tests; chunk tests; retry tests.
 
 ## Next — M3 speech
 

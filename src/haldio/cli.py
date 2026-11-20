@@ -19,13 +19,15 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = sub.add_parser("inspect", help="Print the structure of a PDF (M1).")
     inspect_parser.add_argument("pdf", help="Path to the PDF file")
     inspect_parser.add_argument("--json", action="store_true", help="Write document.json")
-    # M2: script <pdf>, M3: run <pdf>, M4: serve
+    # M3: run <pdf>, M4: serve
     for name, help_text in (
-        ("script", "Build script.md and the QA report (M2)."),
         ("run", "Build the audiobook end to end (M3)."),
         ("serve", "Start the web interface (M4)."),
     ):
         sub.add_parser(name, help=help_text)
+    script_parser = sub.add_parser("script", help="Build script.md and the QA report (M2).")
+    script_parser.add_argument("pdf", help="Path to the PDF file")
+    script_parser.add_argument("-o", "--out", default=None, help="Output directory")
     return parser
 
 

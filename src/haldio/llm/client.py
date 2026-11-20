@@ -70,7 +70,7 @@ class LlmClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "LlmClient":
+    def __enter__(self) -> LlmClient:
         return self
 
     def __exit__(self, *exc: object) -> None:

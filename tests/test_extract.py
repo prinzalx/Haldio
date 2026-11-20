@@ -56,6 +56,8 @@ def test_footnote_is_detected(document) -> None:
 def test_two_column_reading_order(document) -> None:
     page2 = " ".join(b.text for b in document.blocks if b.page == 2)
     assert page2.index("linke Spaltentext") < page2.index("rechte Spaltentext")
+    # the phrase only exists if column lines were not interleaved by y-sort
+    assert "Messung der Spannung" in page2
 
 
 def test_cross_references_found(document) -> None:

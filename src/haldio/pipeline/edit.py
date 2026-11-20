@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from haldio.config import Config
-from haldio.pipeline.editor_output import EDITOR_JSON_SCHEMA, EditorResult
+from haldio.pipeline.editor_output import EditorResult
 
 _SPEAK_RULES = {
     "z. B.": "zum Beispiel",
@@ -20,7 +20,9 @@ _SPEAK_RULES = {
 }
 
 
-def load_prompt_version(config: Config, prompts_dir: str = "prompts/editor") -> tuple[str, list[dict[str, str]]]:
+def load_prompt_version(
+    config: Config, prompts_dir: str = "prompts/editor"
+) -> tuple[str, list[dict[str, str]]]:
     """Read the system prompt and the few-shot examples for one version."""
     from pathlib import Path
 
@@ -61,11 +63,28 @@ def build_user_message(chunk: dict[str, Any], target_language: str) -> str:
     )
 
 
+def system_with_examples(system: str, examples: list[dict[str, str]]) -> str:
+    """Append the few-shot examples so the model sees the exact JSON shape."""
+    if not examples:
+        return system
+    parts = [system, "\n\n# Examples"]
+    for case in examples:
+        parts.append(f"\n## {case.get('name', 'example')}\nInput:\n{case['source'].strip()}")
+        parts.append(f"Output:\n{case['output'].strip()}")
+    return "".join(parts)
+
+
 def parse_editor_result(text: str) -> EditorResult:
-    """Parse the JSON answer, without the thinking blocks."""
+    """Parse the JSON answer, without the thinking blocks.
+
+    A JSON object without a "blocks" key is rejected: Pydantic defaults would
+    hide a wrong-shaped answer as valid-but-empty.
+    """
     from haldio.llm.client import parse_json_object, strip_thinking
 
     data = parse_json_object(strip_thinking(text))
+    if not isinstance(data, dict) or "blocks" not in data:
+        raise ValueError("answer JSON has no 'blocks' key")
     return EditorResult.model_validate(data)
 
 

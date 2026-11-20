@@ -100,28 +100,26 @@ def _by_y(line: Line) -> tuple[float, float]:
     return (line.bbox[1], line.bbox[0])
 
 
-def split_columns(lines: list[Line], page_width: float) -> list[Line]:
-    """Order lines for single- or two-column pages (brief: correct reading order).
+def _side_order(segment: list[Line], mid: float) -> list[Line]:
+    left = [ln for ln in segment if (ln.bbox[0] + ln.bbox[2]) / 2 < mid]
+    right = [ln for ln in segment if (ln.bbox[0] + ln.bbox[2]) / 2 >= mid]
+    if left and right:
+        return sorted(left, key=_by_y) + sorted(right, key=_by_y)
+    return sorted(segment, key=_by_y)
 
-    A column border exists only where a real vertical gap is free of text. Each line
-    is assigned to exactly one side, so no line can be lost.
-    """
-    if not lines:
-        return []
-    left_edge = min(ln.bbox[0] for ln in lines)
-    right_edge = max(ln.bbox[2] for ln in lines)
-    content = right_edge - left_edge
-    if content <= 1:
-        return sorted(lines, key=_by_y)
 
+def _column_mid(lines: list[Line], left_edge: float, content: float) -> float | None:
+    """Find the gutter x from narrow lines only; full-width lines hide it."""
+    body = [ln for ln in lines if ln.width < content * 0.6]
+    if not body:
+        return None
     bins = max(24, int(content))
     occupied = [False] * bins
-    for line in lines:
+    for line in body:
         start = int((line.bbox[0] - left_edge) / content * bins)
         end = int((line.bbox[2] - left_edge) / content * bins)
         for index in range(max(0, start), min(bins, end + 1)):
             occupied[index] = True
-
     best_start, best_run, run = -1, 0, 0
     for index, used in enumerate(occupied):
         if used:
@@ -132,14 +130,39 @@ def split_columns(lines: list[Line], page_width: float) -> list[Line]:
             run += 1
     if run > best_run:
         best_start, best_run = bins - run, run
+    if best_start < 0 or (best_run / bins) * content < max(8.0, content * 0.04):
+        return None
+    return left_edge + (best_start + best_run / 2) / bins * content
 
-    if best_start >= 0 and (best_run / bins) * content > page_width * 0.06:
-        mid = left_edge + (best_start + best_run / 2) / bins * content
-        left = sorted((ln for ln in lines if (ln.bbox[0] + ln.bbox[2]) / 2 < mid), key=_by_y)
-        right = sorted((ln for ln in lines if (ln.bbox[0] + ln.bbox[2]) / 2 >= mid), key=_by_y)
-        if left and right:
-            return left + right
-    return sorted(lines, key=_by_y)
+
+def split_columns(lines: list[Line]) -> list[Line]:
+    """Order lines for single- or two-column pages (brief: correct reading order).
+
+    A column border exists only where a real vertical gap is free of text. Each line
+    is assigned to exactly one side, so no line can be lost. Full-width lines end a
+    column zone, so a heading above two columns does not hide the gutter.
+    """
+    if not lines:
+        return []
+    left_edge = min(ln.bbox[0] for ln in lines)
+    right_edge = max(ln.bbox[2] for ln in lines)
+    content = right_edge - left_edge
+    if content <= 1:
+        return sorted(lines, key=_by_y)
+    mid = _column_mid(lines, left_edge, content)
+    if mid is None:
+        return sorted(lines, key=_by_y)
+    out: list[Line] = []
+    segment: list[Line] = []
+    for line in sorted(lines, key=_by_y):
+        if line.width > content * 0.6:
+            out.extend(_side_order(segment, mid))
+            segment = []
+            out.append(line)
+        else:
+            segment.append(line)
+    out.extend(_side_order(segment, mid))
+    return out
 
 
 def _body_size(pages_lines: list[list[Line]]) -> float:
@@ -215,7 +238,7 @@ def _classify_page(
     """Turn one page into blocks. Headings get a temporary level from font size."""
     lines = [ln for ln in _page_lines(page, page_no) if (page_no - 1, ln.text) not in drop]
     rects = _table_cells(page)
-    ordered = split_columns(lines, page.rect.width)
+    ordered = split_columns(lines)
     toc_hits = sum(1 for ln in ordered if _toc_line(ln.text))
     is_toc_page = toc_hits >= max(3, int(len(ordered) * 0.4))
     out: list[Block] = []

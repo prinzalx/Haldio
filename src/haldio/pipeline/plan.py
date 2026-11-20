@@ -21,8 +21,21 @@ _TERM_PATTERNS = [
 ]
 
 _STOP_TERMS = {
-    "Seite", "Page", "Tabelle", "Table", "Abbildung", "Figure", "Abschnitt", "Section",
-    "Kapitel", "Chapter", "Anhang", "Beispiel", "Example", "Bild", " Nummer",
+    "Seite",
+    "Page",
+    "Tabelle",
+    "Table",
+    "Abbildung",
+    "Figure",
+    "Abschnitt",
+    "Section",
+    "Kapitel",
+    "Chapter",
+    "Anhang",
+    "Beispiel",
+    "Example",
+    "Bild",
+    " Nummer",
 }
 
 
@@ -34,7 +47,7 @@ class ChapterNode:
     title: str
     level: int
     page: int
-    children: list["ChapterNode"] = field(default_factory=list)
+    children: list[ChapterNode] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -118,7 +131,9 @@ def _target_labels(blocks: list[Block]) -> dict[str, str]:
             if label:
                 found.setdefault(f"table:{label.group(1)}", block.id)
         elif block.type == "figure_caption":
-            label = re.match(r"^\s*(?:abbildung|figur|figure|fig\.)\s*([0-9]+[a-z]?)", block.text, re.I)
+            label = re.match(
+                r"^\s*(?:abbildung|figur|figure|fig\.)\s*([0-9]+[a-z]?)", block.text, re.I
+            )
             if label:
                 found.setdefault(f"figure:{label.group(1)}", block.id)
         elif block.type == "heading":
@@ -143,7 +158,9 @@ def estimate_audio_seconds(document: Document, words_per_minute: int = 130) -> i
     return int(words / words_per_minute * 60)
 
 
-def build_doc_map(document: Document, summary: str = "", topics: list[str] | None = None) -> dict[str, Any]:
+def build_doc_map(
+    document: Document, summary: str = "", topics: list[str] | None = None
+) -> dict[str, Any]:
     """Assemble the full doc_map structure."""
     return {
         "title": document.title,

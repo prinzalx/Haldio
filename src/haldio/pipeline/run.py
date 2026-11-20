@@ -1,0 +1,166 @@
+"""CLI pipeline S1..S7: PDF in, script.md + QA report out (stage S8+ come in M3)."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from haldio.config import Config
+from haldio.extract import PyMuPDFExtractor
+from haldio.llm import LlmClient
+from haldio.pipeline.assemble import assemble_script, write_script
+from haldio.pipeline.chunk import make_chunks
+from haldio.pipeline.edit import (
+    build_user_message,
+    load_prompt_version,
+    parse_editor_result,
+    system_with_examples,
+)
+from haldio.pipeline.editor_output import EDITOR_JSON_SCHEMA, ChunkEdit
+from haldio.pipeline.ingest import ingest
+from haldio.pipeline.plan import build_doc_map
+from haldio.pipeline.qa_report import ChunkQA, render_qa_html, write_qa_report
+from haldio.pipeline.verify import Issue, verify_chunk
+
+
+@dataclass
+class ScriptResult:
+    """Outcome of the script pipeline."""
+
+    out_dir: Path
+    chunks: int = 0
+    needs_review: int = 0
+    errors: int = 0
+    warnings: int = 0
+    error: str = ""
+    doc_meta: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def return_code(self) -> int:
+        return 1 if self.error else 0
+
+    def summary(self) -> str:
+        if self.error:
+            return f"script failed: {self.error}"
+        return (
+            f"script: {self.chunks} chunks -> {self.out_dir / '04_script' / 'script.md'}\n"
+            f"QA: {self.errors} errors, {self.warnings} warnings, "
+            f"{self.needs_review} need review"
+        )
+
+
+def cache_key(payload: object, prompt_version: str, model_id: str) -> str:
+    """Hash of (input, prompt version, model id) — the brief's editor cache key."""
+    blob = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    raw = f"{blob}|{prompt_version}|{model_id}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _write_json(path: Path, data: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def edit_chunk_with_retry(
+    chunk: dict[str, Any],
+    client: LlmClient,
+    system_prompt: str,
+    target_language: str,
+    max_retries: int,
+) -> tuple[ChunkEdit, list[Issue]]:
+    """Call the editor, verify, and retry with the issues as feedback."""
+    feedback = ""
+    issues: list[Issue] = []
+    best: ChunkEdit | None = None
+    for attempt in range(max_retries + 1):
+        user = build_user_message(chunk, target_language) + feedback
+        answer = client.chat(system_prompt, user, json_schema=EDITOR_JSON_SCHEMA)
+        try:
+            result = parse_editor_result(answer.text)
+        except Exception as error:  # noqa: BLE001 - any bad answer triggers a retry
+            feedback = f"\n\nPrevious answer was invalid: {error}. Return valid JSON only."
+            continue
+        if not result.blocks:
+            feedback = (
+                "\n\nPrevious answer had an empty blocks array. "
+                'Return {"blocks": [...]} with the spoken blocks.'
+            )
+            continue
+        issues = verify_chunk(chunk["blocks"], result, chunk["protected_terms"], target_language)
+        best = ChunkEdit(chunk_id=chunk["chunk_id"], result=result, attempts=attempt + 1)
+        if not any(i.is_error for i in issues):
+            return best, issues
+        names = ", ".join(sorted({i.rule for i in issues if i.is_error}))
+        feedback = f"\n\nFix these issues: {names}."
+    if best is None:
+        best = ChunkEdit(chunk_id=chunk["chunk_id"], result=None, attempts=max_retries + 1)
+    best.needs_review = True
+    return best, issues
+
+
+def run_script(
+    pdf_path: Path,
+    config: Config,
+    out_dir: Path,
+    client_factory: Callable[[], LlmClient] | None = None,
+) -> ScriptResult:
+    """Run S1..S7 and write the job folder layout."""
+    ingested = ingest(pdf_path)
+    if not ingested.ok:
+        return ScriptResult(out_dir=out_dir, error=ingested.error)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    document = PyMuPDFExtractor().extract(pdf_path)
+    _write_json(out_dir / "01_extract" / "document.json", document.to_dict())
+
+    doc_map = build_doc_map(document)
+    _write_json(out_dir / "02_plan" / "doc_map.json", doc_map)
+
+    target_language = document.language if document.language in ("de", "en") else "de"
+    chunks = make_chunks(document, config.llm.max_input_tokens, dict(config.policies))
+
+    system_prompt, examples = load_prompt_version(config)
+    system_prompt = system_with_examples(system_prompt, examples)
+    client = client_factory() if client_factory else LlmClient(config.llm)
+    edits: list[ChunkEdit] = []
+    qa: list[ChunkQA] = []
+    previous_tail = ""
+    try:
+        for chunk in chunks:
+            chunk["previous_script_tail"] = previous_tail
+            edit, issues = edit_chunk_with_retry(
+                chunk, client, system_prompt, target_language, config.editor.max_retries
+            )
+            edits.append(edit)
+            qa.append(
+                ChunkQA(chunk_id=chunk["chunk_id"], issues=issues, needs_review=edit.needs_review)
+            )
+            _write_json(out_dir / "03_edit" / "chunks" / f"{chunk['chunk_id']}.in.json", chunk)
+            if edit.result is not None:
+                _write_json(
+                    out_dir / "03_edit" / "chunks" / f"{chunk['chunk_id']}.out.json",
+                    edit.result.model_dump(),
+                )
+                spoken = " ".join(b.text for b in edit.result.blocks)
+                previous_tail = " ".join(spoken.split()[-20:])
+    finally:
+        if client_factory is None:
+            client.close()
+
+    _write_json(out_dir / "03_edit" / "qa.json", [asdict(c) for c in qa])
+    script_md, data = assemble_script(edits)
+    write_script(out_dir, script_md, data)
+    write_qa_report(out_dir, render_qa_html(qa, doc_map))
+
+    return ScriptResult(
+        out_dir=out_dir,
+        chunks=len(chunks),
+        needs_review=sum(1 for e in edits if e.needs_review),
+        errors=sum(1 for c in qa if c.errors),
+        warnings=sum(len(c.warnings) for c in qa),
+        doc_meta=doc_map,
+    )
