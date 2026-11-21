@@ -367,4 +367,8 @@ became a time-shifted process.
 
 - done. The worker no longer parses human text for the page count. `progress(stage, value, note, page_count=...)` receives the number from the ingest stage (`run_script` passes `page_count=ingested.page_count` at the extracting report); `_PAGES_RE` and its `import re` are removed. Proof: `test_page_count_saved_during_extract_and_title_fallback` (field -> 12) and `test_page_count_comes_from_the_field_not_the_note_text` (note text alone -> 0).
 
+## Correction 6 - §2.2: gate re-check on the worker timer
+
+- done. The 5-second gate re-check runs in the worker thread (`threading.Event.wait` loop), not in browser polls; the 5-minute ask is counted in seconds with `time.monotonic()` (`_GATE_STEP_S`/`_GATE_RECHECK_S`/`_GATE_ASK_AFTER_S`), so a closed or backgrounded tab cannot stall the job. The next check is scheduled 5 s after the previous one finished, so a slow guard call cannot collapse the rhythm. Proof: `test_gate_continues_without_http_request` (job reaches done with no HTTP machinery at all, guard called exactly twice), `test_gate_asks_for_the_button_after_300_seconds`, `test_gate_check_impossible_shows_the_button_hint_after_300_seconds`.
+
 Stop - waiting for the owner's OK on the screenshots.

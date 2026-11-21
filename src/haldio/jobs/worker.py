@@ -42,6 +42,12 @@ _ITEM_WORDS = {
 _REAL_MARKERS = ("", "ok", "synth")
 _CONSOLE = logging.getLogger("haldio.worker")
 
+# Gate timers run in the worker thread, never in the browser: one second per
+# wait step, a model re-check every 5 s, the manual ask after 300 s.
+_GATE_STEP_S = 1.0
+_GATE_RECHECK_S = 5.0
+_GATE_ASK_AFTER_S = 300.0
+
 
 def _fallback_title(meta: dict[str, Any], file_name: str) -> str:
     """PDF without metadata title: first top-level heading, else filename stem."""
@@ -297,7 +303,7 @@ class Worker:
                 self._gates[job_id] = event
 
             def wait_more() -> bool:
-                return event.wait(1.0)
+                return event.wait(_GATE_STEP_S)
 
             loaded = loaded_llm_models()
             if loaded == []:
@@ -316,19 +322,26 @@ class Worker:
                     if job_id in self._cancelled:
                         break
             else:
-                polls = 0
+                # seconds, counted by the worker thread; no browser polls involved
+                start = time.monotonic()
+                next_check = start + _GATE_RECHECK_S
                 while not wait_more():
                     if job_id in self._cancelled:
                         break
-                    polls += 1
-                    if polls % 5:
+                    if time.monotonic() < next_check:
                         continue
                     loaded = loaded_llm_models()
+                    # 5 s of real rest after each check, even when the guard
+                    # call itself took a long time
+                    next_check = time.monotonic() + _GATE_RECHECK_S
+                    late = time.monotonic() - start >= _GATE_ASK_AFTER_S
                     if loaded == []:
                         break  # model gone: the flow continues on its own
                     if loaded is None:
                         detail = f"{note} (Prüfen nicht möglich)"
-                    elif polls >= 300:
+                        if late:
+                            detail += " · bitte „Erneut prüfen“ drücken"
+                    elif late:
                         detail = (
                             f"LM Studio lädt noch: {', '.join(loaded)}"
                             " · bitte „Erneut prüfen“ drücken"

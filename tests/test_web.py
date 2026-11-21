@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from haldio import __version__
 from haldio.config import Config
+from haldio.jobs import worker as worker_module
 from haldio.jobs.index import JobIndex
 from haldio.jobs.worker import Worker
 from haldio.pipeline.master import MasterResult
@@ -331,8 +334,8 @@ def test_gate_blocks_until_continue(tmp_path, monkeypatch) -> None:
     assert _wait_for_status(index, job.id, "done") == "done"
 
 
-def test_gate_continues_by_itself_when_model_unloads(tmp_path, monkeypatch) -> None:
-    """Fake guard: loaded -> unloaded; the flow re-checks and continues alone."""
+def test_gate_continues_without_http_request(tmp_path, monkeypatch) -> None:
+    """The worker's own timer frees the gate; no browser request is needed."""
     config = Config()
     config.paths.data_dir = tmp_path
     config.tts.backend = "qwencpp"
@@ -345,6 +348,9 @@ def test_gate_continues_by_itself_when_model_unloads(tmp_path, monkeypatch) -> N
         return ["bubo"] if checks["n"] < 2 else []
 
     monkeypatch.setattr("haldio.jobs.worker.loaded_llm_models", fake_guard)
+    monkeypatch.setattr(worker_module, "_GATE_STEP_S", 0.01)
+    ticks = iter(range(0, 10000, 10))
+    monkeypatch.setattr(worker_module.time, "monotonic", lambda: float(next(ticks)))
 
     def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
         gate = kwargs.get("gate")
@@ -354,7 +360,85 @@ def test_gate_continues_by_itself_when_model_unloads(tmp_path, monkeypatch) -> N
 
     worker = Worker(index, config, run_fn=run_fn, inline=False)
     worker.start()
-    # nobody presses anything: the re-check after 5 s frees the gate
+    # nobody presses anything and no HTTP request arrives: the timer frees the gate
+    assert _wait_for_status(index, job.id, "done", timeout=30) == "done"
+    assert checks["n"] == 2  # first check + one re-check, both by the worker
+
+
+def test_gate_asks_for_the_button_after_300_seconds(tmp_path, monkeypatch) -> None:
+    """The 5-minute ask is counted in seconds by the worker thread, not in polls."""
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.tts.backend = "qwencpp"
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf")
+    monkeypatch.setattr("haldio.jobs.worker.loaded_llm_models", lambda *a, **k: ["bubo"])
+    monkeypatch.setattr(worker_module, "_GATE_STEP_S", 0.01)
+    ticks = iter(range(0, 10000, 60))
+    monkeypatch.setattr(worker_module.time, "monotonic", lambda: float(next(ticks)))
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        gate = kwargs.get("gate")
+        if gate:
+            gate("LLM stoppen, dann Weiter drücken.")
+        return _fake_result(out_dir)
+
+    worker = Worker(index, config, run_fn=run_fn, inline=False)
+    worker.start()
+    asked = ""
+    for _ in range(200):
+        try:
+            asked = index.get(job.id).message
+        except (ValueError, json.JSONDecodeError):
+            asked = ""  # job.json was mid-write when polled
+        if "Erneut prüfen" in asked:
+            break
+        time.sleep(0.02)
+    assert "Erneut prüfen" in asked  # 300 fake seconds after the gate opened
+    assert worker.continue_job(job.id) is True
+    assert _wait_for_status(index, job.id, "done", timeout=30) == "done"
+
+
+def test_gate_check_impossible_shows_the_button_hint_after_300_seconds(
+    tmp_path, monkeypatch
+) -> None:
+    """When the guard check stops working, the ask text still appears after 300 s."""
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.tts.backend = "qwencpp"
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf")
+    seen = {"n": 0}
+
+    def fake_guard(*_a, **_k):
+        seen["n"] += 1
+        return ["bubo"] if seen["n"] == 1 else None
+
+    monkeypatch.setattr("haldio.jobs.worker.loaded_llm_models", fake_guard)
+    monkeypatch.setattr(worker_module, "_GATE_STEP_S", 0.01)
+    ticks = iter(range(0, 10000, 60))
+    monkeypatch.setattr(worker_module.time, "monotonic", lambda: float(next(ticks)))
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        gate = kwargs.get("gate")
+        if gate:
+            gate("LLM stoppen, dann Weiter drücken.")
+        return _fake_result(out_dir)
+
+    worker = Worker(index, config, run_fn=run_fn, inline=False)
+    worker.start()
+    asked = ""
+    for _ in range(200):
+        try:
+            asked = index.get(job.id).message
+        except (ValueError, json.JSONDecodeError):
+            asked = ""  # job.json was mid-write when polled
+        if "Erneut prüfen" in asked:
+            break
+        time.sleep(0.02)
+    assert "(Prüfen nicht möglich)" in asked
+    assert "Erneut prüfen" in asked
+    assert worker.continue_job(job.id) is True
     assert _wait_for_status(index, job.id, "done", timeout=30) == "done"
 
 
