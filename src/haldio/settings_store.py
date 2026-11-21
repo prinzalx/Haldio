@@ -194,4 +194,20 @@ def parse_form(data: dict[str, str]) -> tuple[dict[str, object], dict[str, str]]
         else:
             errors[name] = message
 
+    web_host = (data.get("server.host") or "").strip()
+    if not web_host:
+        pass  # empty field keeps the configured address
+    elif any(c.isspace() for c in web_host):
+        errors["server.host"] = "Web-Adresse: keine Leerzeichen erlaubt."
+    else:
+        put("server", "host", web_host)
+
+    web_port = (data.get("server.port") or "").strip()
+    if not web_port:
+        pass  # empty field keeps the configured port
+    elif web_port.isdigit() and 1 <= int(web_port) <= 65535:
+        put("server", "port", int(web_port))
+    else:
+        errors["server.port"] = "Port: ganze Zahl von 1 bis 65535."
+
     return values, errors

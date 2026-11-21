@@ -13,9 +13,6 @@
   <h2>📋 Zusammenfassung</h2>
   {% if summary.summary %}<p>{{ summary.summary }}</p>
   {% else %}<p class="muted">Wird erstellt …</p>{% endif %}
-  <p><strong>Themen:</strong>
-    {% if summary.main_topics %}{{ summary.main_topics | join(", ") }}
-    {% else %}<span class="muted">Wird erstellt …</span>{% endif %}</p>
   {% if summary.language or summary.estimated_audio_seconds %}
   <p>{% if summary.language %}<strong>Sprache:</strong> {{ summary.language }}{% endif %}
     {% if summary.estimated_audio_seconds %}

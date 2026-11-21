@@ -2,7 +2,7 @@
          data-log-total="{{ job.logs | length }}"
          {% if job.status not in ('queued', 'extracting', 'planning', 'editing', 'verifying',
          'speaking', 'mastering') %}open{% endif %}>
-  <summary>🗒 Technische Details (<span data-log-count>{{ job.logs | length }}</span> Einträge)</summary>
+  <summary>Technische Details (<span data-log-count>{{ job.logs | length }}</span> Einträge)</summary>
   <div class="logbox">
     <pre data-log-lines>{% for line in job.logs %}<span class="{% if '[ERROR]' in line %}log-err{% elif '[WARN]' in line %}log-warn{% endif %}">{{ line }}
 </span>{% endfor %}</pre>

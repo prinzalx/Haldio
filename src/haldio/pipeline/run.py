@@ -64,7 +64,7 @@ class ScriptResult:
 
 
 def cache_key(payload: object, prompt_version: str, model_id: str) -> str:
-    """Hash of (input, prompt version, model id) — the brief's editor cache key."""
+    """Hash of (input, prompt version, model id) â€” the brief's editor cache key."""
     blob = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     raw = f"{blob}|{prompt_version}|{model_id}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -91,7 +91,7 @@ def _before_speak(config: Config, gate: Callable[[str], None] | None) -> None:
     if config.hooks.before_speak.strip():
         _before_speak(config, gate)
     elif gate:
-        gate("LLM stoppen, dann Weiter drücken.")
+        gate("LLM stoppen, dann Weiter drÃ¼cken.")
 
 
 def edit_chunk_with_retry(
@@ -314,7 +314,7 @@ def run_book(
     """
     report = progress or (lambda _stage, _value, _note="": None)
     if gate and not llm_reachable(config.llm):
-        gate("LLM starten, dann Weiter drücken.")
+        gate("LLM starten, dann Weiter drÃ¼cken.")
     script = run_script(pdf_path, config, out_dir, client_factory, progress, language)
     if not script.ok:
         return BookResult(script, SpeakResult(error=script.error), MasterResult())
@@ -348,7 +348,7 @@ def run_book(
         report(
             "speaking",
             65,
-            f"{spoken.empty_sections} Abschnitte ohne Hörtext – "
+            f"{spoken.empty_sections} Abschnitte ohne HÃ¶rtext â€“ "
             "es wird der Originaltext vorgelesen #summary",
         )
     if not spoken.ok:
@@ -361,7 +361,7 @@ def run_book(
         config.audio.pause_ms.model_dump(),
         config.audio.mp3_bitrate_kbps,
         progress=lambda i, n, fmt="": report(
-            "mastering", 90 + int(10 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
+            "mastering", 90 + int(9 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
         ),
     )
     return BookResult(script, spoken, master)
@@ -404,7 +404,7 @@ def run_speech(
         report(
             "speaking",
             65,
-            f"{spoken.empty_sections} Abschnitte ohne Hörtext – "
+            f"{spoken.empty_sections} Abschnitte ohne HÃ¶rtext â€“ "
             "es wird der Originaltext vorgelesen #summary",
         )
     if not spoken.ok:
@@ -416,7 +416,7 @@ def run_speech(
         config.audio.pause_ms.model_dump(),
         config.audio.mp3_bitrate_kbps,
         progress=lambda i, n, fmt="": report(
-            "mastering", 90 + int(10 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
+            "mastering", 90 + int(9 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
         ),
     )
     return BookResult(script, spoken, master)

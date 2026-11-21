@@ -132,11 +132,13 @@
   <p class="settingrow">
     <span>
       <label for="f-host">Web-Adresse</label>
-      <input id="f-host" value="{{ config.server.host }}" size="10" readonly>
+      <input id="f-host" name="server.host" value="{{ form['server.host'] }}" size="10">
+      {% if errors.get('server.host') %}<p class="error">{{ errors['server.host'] }}</p>{% endif %}
     </span>
     <span>
       <label for="f-webport">Web-Port</label>
-      <input id="f-webport" value="{{ config.server.port }}" size="5" readonly>
+      <input id="f-webport" name="server.port" value="{{ form['server.port'] }}" size="5">
+      {% if errors.get('server.port') %}<p class="error">{{ errors['server.port'] }}</p>{% endif %}
     </span>
     <span class="muted small">Neustart nötig</span>
   </p>
