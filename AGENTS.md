@@ -39,7 +39,12 @@ uv run uvicorn haldio.web:app --port 8505   # web server (M4)
 
 After each finished work section (before reporting it done), delegate a review to the
 `implementation-reviewer` subagent (`.qwen/agents/`). It reads only; the main agent applies
-whatever its change prompt justifies.
+whatever its change prompt justifies. Before each commit the reviewer reads the spec file for
+that section (`docs/corrections/`) and names the proof for each bullet; a bullet without proof
+is `open`, never `done`.
+
+After a context compression, read `docs/BRIEF.md`, `AGENTS.md`, and the current correction
+file again before the next section.
 
 ## Open questions
 

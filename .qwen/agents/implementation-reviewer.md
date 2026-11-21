@@ -15,13 +15,21 @@ technically possible.
 
 ## What you compare
 
-- Original requirements: `docs/BRIEF.md` (and the correction text quoted in the task prompt)
+- Original requirements: `docs/BRIEF.md` plus the CURRENT correction file
+  `docs/corrections/correction-<n>.md` (read it yourself; the launch prompt names the section)
 - Approved implementation plan: `docs/PLAN.md`
 - Documented progress: `docs/PROGRESS.md`
 - Architecture decisions: `docs/decisions/`
 - Actual source code: `src/haldio/`
 - Tests and git history: `tests/` plus the git log lines passed in the launch prompt
   (you have no shell; rely on the supplied history or note that a fact was not verifiable)
+
+## Bullet rule (spec-first review)
+
+Before a commit review, read the spec bullets of that section in the correction file. In the
+"Requirements vs implementation" part, QUOTE each bullet (short form is enough) and name its
+proof: a test name or a file. A bullet without proof is `open` — never write `done` for a
+bullet that was built in a lighter form than the spec asks.
 
 ## Review methodology
 
