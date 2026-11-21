@@ -35,6 +35,12 @@ uv run uvicorn haldio.web:app --port 8505   # web server (M4)
 - **Never start TTS automatically.** Loading Qwen3-TTS needs a user order; an unrequested
   model load crashes the system. Only run stages S8/S9 (speak/master) when the user asks.
 
+## Reviews
+
+After each finished work section (before reporting it done), delegate a review to the
+`implementation-reviewer` subagent (`.qwen/agents/`). It reads only; the main agent applies
+whatever its change prompt justifies.
+
 ## Open questions
 
 See `docs/PROGRESS.md`. Ask the user all questions in ONE message, each with a default answer.
