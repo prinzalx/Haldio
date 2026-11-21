@@ -529,6 +529,14 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
         "audio.format.mp3": "on" if "mp3" in cfg.audio.formats else "",
         "audio.format.ogg": "on" if "ogg" in cfg.audio.formats else "",
         "audio.mp3_bitrate_kbps": str(cfg.audio.mp3_bitrate_kbps),
+        "audio.pause_ms.paragraph": _secs(cfg.audio.pause_ms.paragraph),
+        "audio.pause_ms.heading": _secs(cfg.audio.pause_ms.heading),
+        "audio.pause_ms.chapter": _secs(cfg.audio.pause_ms.chapter),
+        "llm.timeout_s": str(cfg.llm.timeout_s),
+        "llm.temperature": _comma(cfg.llm.temperature),
+        "tts.max_chars_per_unit": str(cfg.tts.max_chars_per_unit),
+        "tts.qwencpp_port": str(cfg.tts.qwencpp_port),
+        "tts.qwencpp_startup_timeout": str(cfg.tts.qwencpp_startup_timeout),
         "editor.review_before_tts": "on" if cfg.editor.review_before_tts else "",
         "tts.confirm_before_start": "on" if cfg.tts.confirm_before_start else "",
         "editor.fallback_to_source": "on" if cfg.editor.fallback_to_source else "",
@@ -538,6 +546,15 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
 
 _SAFE_VOICE = re.compile(r"[A-Za-z0-9_.-]{1,40}")
 _SAMPLE_TEXT = "Guten Tag. Dies ist eine Hörprobe."
+
+
+def _secs(ms: int) -> str:
+    """Milliseconds as German seconds text (500 -> "0,5")."""
+    return _comma(ms / 1000)
+
+
+def _comma(value: float) -> str:
+    return f"{value:g}".replace(".", ",")
 
 
 def _sample_dir(cfg: Config) -> Path:

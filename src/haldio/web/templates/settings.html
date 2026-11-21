@@ -19,6 +19,7 @@
   </select>
   <input id="f-model-free" name="llm.model" value="{{ form['llm.model'] }}" size="24" disabled>
   {% if errors.get('llm.model') %}<p class="error">{{ errors['llm.model'] }}</p>{% endif %}
+  <p class="muted small">API-Schlüssel: {% if config.llm.api_key %}gesetzt{% else %}nicht gesetzt{% endif %}</p>
 
   <p>
     <button type="button" id="load-models">🔄 Modelle laden</button>
@@ -86,6 +87,24 @@
   <label for="f-bitrate">Bitrate (kbit/s)</label>
   <input id="f-bitrate" name="audio.mp3_bitrate_kbps" value="{{ form['audio.mp3_bitrate_kbps'] }}" size="5">
   {% if errors.get('audio.mp3_bitrate_kbps') %}<p class="error">{{ errors['audio.mp3_bitrate_kbps'] }}</p>{% endif %}
+  <p class="settingrow">
+    <span>
+      <label for="f-pause-para">Pause nach Absatz (Sekunden)</label>
+      <input id="f-pause-para" name="audio.pause_ms.paragraph"
+             value="{{ form['audio.pause_ms.paragraph'] }}" size="4">
+    </span>
+    <span>
+      <label for="f-pause-head">Pause nach Überschrift (Sekunden)</label>
+      <input id="f-pause-head" name="audio.pause_ms.heading"
+             value="{{ form['audio.pause_ms.heading'] }}" size="4">
+    </span>
+    <span>
+      <label for="f-pause-chap">Pause nach Kapitel (Sekunden)</label>
+      <input id="f-pause-chap" name="audio.pause_ms.chapter"
+             value="{{ form['audio.pause_ms.chapter'] }}" size="4">
+    </span>
+  </p>
+  {% if errors.get('audio.pause_ms') %}<p class="error">{{ errors['audio.pause_ms'] }}</p>{% endif %}
 </section>
 
 <section class="card">
@@ -101,12 +120,59 @@
   {% if errors.get('editor.max_retries') %}<p class="error">{{ errors['editor.max_retries'] }}</p>{% endif %}
 </section>
 
+{% set adv_err = errors.get('llm.timeout_s') or errors.get('llm.temperature') or
+  errors.get('tts.max_chars_per_unit') or errors.get('tts.qwencpp_port') or
+  errors.get('tts.qwencpp_startup_timeout') %}
+<details class="card{% if adv_err %} open{% endif %}">
+  <summary>⚙️ Erweitert</summary>
+  <p class="settingrow">
+    <span>
+      <label for="f-host">Web-Adresse</label>
+      <input id="f-host" value="{{ config.server.host }}" size="10" readonly>
+    </span>
+    <span>
+      <label for="f-webport">Web-Port</label>
+      <input id="f-webport" value="{{ config.server.port }}" size="5" readonly>
+    </span>
+    <span class="muted small">Neustart nötig</span>
+  </p>
+  <p class="settingrow">
+    <span>
+      <label for="f-wait">Auf das Sprachmodell warten (Sekunden)</label>
+      <input id="f-wait" name="llm.timeout_s" value="{{ form['llm.timeout_s'] }}" size="5">
+      {% if errors.get('llm.timeout_s') %}<p class="error">{{ errors['llm.timeout_s'] }}</p>{% endif %}
+    </span>
+    <span>
+      <label for="f-unitsize">Zeichen je Sprech-Einheit</label>
+      <input id="f-unitsize" name="tts.max_chars_per_unit" value="{{ form['tts.max_chars_per_unit'] }}" size="5">
+      {% if errors.get('tts.max_chars_per_unit') %}<p class="error">{{ errors['tts.max_chars_per_unit'] }}</p>{% endif %}
+    </span>
+  </p>
+  <p class="settingrow">
+    <span>
+      <label for="f-temperature">Temperatur</label>
+      <input id="f-temperature" name="llm.temperature" value="{{ form['llm.temperature'] }}" size="4">
+      {% if errors.get('llm.temperature') %}<p class="error">{{ errors['llm.temperature'] }}</p>{% endif %}
+    </span>
+    <span>
+      <label for="f-ttsport">TTS-Port</label>
+      <input id="f-ttsport" name="tts.qwencpp_port" value="{{ form['tts.qwencpp_port'] }}" size="5">
+      {% if errors.get('tts.qwencpp_port') %}<p class="error">{{ errors['tts.qwencpp_port'] }}</p>{% endif %}
+    </span>
+    <span>
+      <label for="f-ttsstart">TTS-Startzeit (Sekunden)</label>
+      <input id="f-ttsstart" name="tts.qwencpp_startup_timeout" value="{{ form['tts.qwencpp_startup_timeout'] }}" size="5">
+      {% if errors.get('tts.qwencpp_startup_timeout') %}<p class="error">{{ errors['tts.qwencpp_startup_timeout'] }}</p>{% endif %}
+    </span>
+  </p>
+</details>
+
 <div class="actions card-actions">
   <button type="submit">💾 Speichern</button>
   <button class="secondary" type="submit" formaction="/settings/reset">↩ Auf Standard zurücksetzen</button>
 </div>
 </form>
-<p class="muted small">Server: {{ config.server.host }}:{{ config.server.port }} · Version {{ version }}</p>
+<p class="muted small">Version {{ version }}</p>
 
 <script>
 (function () {

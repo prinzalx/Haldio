@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel
 
 from haldio.config import Config
 
@@ -54,7 +55,13 @@ def apply_override(base: Config, values: dict[str, Any]) -> Config:
         if part is None or not isinstance(updates, dict):
             continue
         for key, value in updates.items():
-            if hasattr(part, key):
+            if not hasattr(part, key):
+                continue
+            current = getattr(part, key)
+            if isinstance(current, BaseModel) and isinstance(value, dict):
+                merged = {**current.model_dump(), **value}
+                setattr(part, key, type(current)(**merged))
+            else:
                 setattr(part, key, value)
     return effective
 
@@ -128,5 +135,65 @@ def parse_form(data: dict[str, str]) -> tuple[dict[str, object], dict[str, str]]
         put("editor", "max_retries", int(retries))
     else:
         errors["editor.max_retries"] = "Wiederholungen: ganze Zahl von 0 bis 5."
+
+    raw_pauses = {
+        name: (data.get(f"audio.pause_ms.{name}") or "").strip()
+        for name in ("paragraph", "heading", "chapter")
+    }
+    pauses: dict[str, int] = {}
+    pause_error = False
+    for name, raw in raw_pauses.items():
+        if not raw:
+            continue  # an empty field keeps that configured pause
+        try:
+            seconds = float(raw.replace(",", "."))
+        except ValueError:
+            seconds = -1.0
+        if not 0 <= seconds <= 30:
+            errors["audio.pause_ms"] = "Pause: Zahl zwischen 0 und 30 Sekunden."
+            pause_error = True
+            break
+        pauses[name] = round(seconds * 1000)
+    if not pause_error and pauses:
+        put("audio", "pause_ms", pauses)
+
+    temperature = (data.get("llm.temperature") or "").strip()
+    if temperature:
+        try:
+            value = float(temperature.replace(",", "."))
+        except ValueError:
+            value = -1.0
+        if 0 <= value <= 2:
+            put("llm", "temperature", value)
+        else:
+            errors["llm.temperature"] = "Temperatur: Zahl zwischen 0 und 2."
+
+    for name, section, attr, low, high, message in (
+        ("llm.timeout_s", "llm", "timeout_s", 1, 3600, "Zeit: ganze Zahl von 1 bis 3600 Sekunden."),
+        (
+            "tts.max_chars_per_unit",
+            "tts",
+            "max_chars_per_unit",
+            100,
+            2000,
+            "Einheitsgröße: ganze Zahl von 100 bis 2000.",
+        ),
+        ("tts.qwencpp_port", "tts", "qwencpp_port", 1, 65535, "Port: ganze Zahl von 1 bis 65535."),
+        (
+            "tts.qwencpp_startup_timeout",
+            "tts",
+            "qwencpp_startup_timeout",
+            10,
+            1800,
+            "Startzeit: ganze Zahl von 10 bis 1800 Sekunden.",
+        ),
+    ):
+        raw = (data.get(name) or "").strip()
+        if not raw:
+            continue  # empty field keeps the configured value
+        if raw.isdigit() and low <= int(raw) <= high:
+            put(section, attr, int(raw))
+        else:
+            errors[name] = message
 
     return values, errors

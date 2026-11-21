@@ -874,6 +874,86 @@ def test_settings_quality_lists_existing_models_only(app_parts, monkeypatch) -> 
     assert "Modell-Datei nicht gefunden." in page.text
 
 
+def test_settings_advanced_card_holds_rare_settings(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings").text
+    assert "Erweitert" in page and "<details" in page  # collapsed card
+    assert "Neustart nötig" in page
+    assert 'name="server.port"' not in page  # host/port are display only
+    assert "API-Schlüssel" in page and "lm-studio" not in page  # key never shown
+    for field in (
+        "llm.timeout_s",
+        "tts.max_chars_per_unit",
+        "llm.temperature",
+        "tts.qwencpp_port",
+        "tts.qwencpp_startup_timeout",
+    ):
+        assert f'name="{field}"' in page
+    assert "Pause nach Absatz" in page and "Pause nach Kapitel" in page
+
+
+def test_settings_api_key_status_words(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    monkeypatch.setattr(app.state.config.llm, "api_key", "", raising=True)
+    page = TestClient(app).get("/settings").text
+    assert "API-Schlüssel: nicht gesetzt" in page
+
+
+def test_settings_save_rare_settings(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    form = dict(
+        _SETTINGS_FORM,
+        **{
+            "audio.pause_ms.paragraph": "0,5",
+            "audio.pause_ms.heading": "0,9",
+            "audio.pause_ms.chapter": "2",
+            "llm.temperature": "0,7",
+            "llm.timeout_s": "600",
+            "tts.max_chars_per_unit": "500",
+            "tts.qwencpp_port": "8111",
+            "tts.qwencpp_startup_timeout": "300",
+        },
+    )
+    response = client.post("/settings", data=form, follow_redirects=False)
+    assert response.status_code == 303
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "paragraph: 500" in text  # seconds became milliseconds on disk
+    assert "temperature: 0.7" in text
+    page = client.get("/settings").text
+    assert 'value="0,7"' in page  # effective value shown back in comma form
+
+
+def test_settings_pause_rejects_bad_value(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    form = dict(
+        _SETTINGS_FORM,
+        **{
+            "audio.pause_ms.paragraph": "abc",
+            "audio.pause_ms.heading": "0,9",
+            "audio.pause_ms.chapter": "1,5",
+        },
+    )
+    page = client.post("/settings", data=form)
+    assert page.status_code == 422
+    assert "Pause: Zahl zwischen 0 und 30 Sekunden." in page.text
+    assert not (app.state.config.paths.data_dir / "settings.local.yaml").is_file()
+
+
+def test_settings_rare_field_error_opens_advanced(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    form = dict(_SETTINGS_FORM, **{"llm.temperature": "5"})
+    page = client.post("/settings", data=form)
+    assert page.status_code == 422
+    assert "Temperatur: Zahl zwischen 0 und 2." in page.text
+    assert '<details class="card open">' in page.text  # error stays visible
+
+
 def test_settings_test_llm_unreachable_shows_error(app_parts, monkeypatch) -> None:
     app, _index, _calls = app_parts
 
