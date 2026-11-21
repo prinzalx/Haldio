@@ -34,6 +34,9 @@ models/
 voices/
 .venv-tts/
 
+# Agent scratch (local only)
+.qwen/tmp/
+
 # OS / editor
 .DS_Store
 Thumbs.db

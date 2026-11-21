@@ -34,9 +34,7 @@ def load_override(data_dir: Path) -> dict[str, Any]:
 def save_override(data_dir: Path, values: dict[str, Any]) -> None:
     path = override_path(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        yaml.safe_dump(values, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    path.write_text(yaml.safe_dump(values, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
 def clear_override(data_dir: Path) -> None:

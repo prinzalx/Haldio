@@ -728,18 +728,52 @@ def test_stepper_state_agrees_with_badge_per_status() -> None:
         return [row["state"] for row in stepper_state(job)]
 
     assert states_for("awaiting_tts") == [
-        "done", "done", "done", "done", "done", "waiting", "pending"]
+        "done",
+        "done",
+        "done",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+    ]
     assert states_for("awaiting_review") == [
-        "done", "done", "done", "done", "waiting", "pending", "pending"]
+        "done",
+        "done",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+        "pending",
+    ]
     assert states_for("waiting_for_user") == [
-        "done", "done", "done", "done", "done", "waiting", "pending"]
+        "done",
+        "done",
+        "done",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+    ]
     assert states_for("queued") == [
-        "waiting", "pending", "pending", "pending", "pending", "pending", "pending"]
-    assert states_for("speaking") == [
-        "done", "done", "done", "done", "done", "current", "pending"]
+        "waiting",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+    ]
+    assert states_for("speaking") == ["done", "done", "done", "done", "done", "current", "pending"]
     assert states_for("done") == ["done"] * 7
     assert states_for("cancelled", "editing") == [
-        "done", "done", "failed", "pending", "pending", "pending", "pending"]
+        "done",
+        "done",
+        "failed",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+    ]
     for status in STATUS_VALUES:
         states = states_for(status, "speaking")
         assert len(states) == 7
@@ -861,9 +895,7 @@ def test_settings_save_writes_override_file(app_parts) -> None:
     client = TestClient(app)
     response = client.post("/settings", data=_SETTINGS_FORM, follow_redirects=False)
     assert response.status_code == 303
-    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
-        encoding="utf-8"
-    )
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(encoding="utf-8")
     assert "qwen3-test" in text
     assert "speaker" not in text  # the empty field keeps the default speaker
     page = client.get("/settings").text
@@ -904,9 +936,7 @@ def test_settings_llm_card_has_dropdown_and_buttons(app_parts) -> None:
 
 def test_settings_model_list_marks_loaded(app_parts, monkeypatch) -> None:
     app, _index, _calls = app_parts
-    monkeypatch.setattr(
-        "haldio.web.app.loaded_llm_models", lambda *a, **k: ["bubo"], raising=True
-    )
+    monkeypatch.setattr("haldio.web.app.loaded_llm_models", lambda *a, **k: ["bubo"], raising=True)
     monkeypatch.setattr(
         "haldio.llm.client.LlmClient.list_models",
         lambda self: ["bubo", "qwen3"],
@@ -1047,9 +1077,7 @@ def test_settings_quality_lists_existing_models_only(app_parts, monkeypatch) -> 
     form = dict(_SETTINGS_FORM, **{"tts.qwencpp_model": str(q4)})
     response = client.post("/settings", data=form, follow_redirects=False)
     assert response.status_code == 303
-    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
-        encoding="utf-8"
-    )
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(encoding="utf-8")
     assert "Q4_K_M" in text
     bad = dict(_SETTINGS_FORM, **{"tts.qwencpp_model": str(gone)})
     page = client.post("/settings", data=bad)
@@ -1101,9 +1129,7 @@ def test_settings_save_rare_settings(app_parts) -> None:
     )
     response = client.post("/settings", data=form, follow_redirects=False)
     assert response.status_code == 303
-    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
-        encoding="utf-8"
-    )
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(encoding="utf-8")
     assert "paragraph: 500" in text  # seconds became milliseconds on disk
     assert "temperature: 0.7" in text
     page = client.get("/settings").text
@@ -1222,8 +1248,7 @@ def test_settings_page_shows_form_and_server(app_parts) -> None:
 
 def test_calm_look_polish_in_stylesheet() -> None:
     css = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "haldio" / "web" / "static" / "style.css"
+        Path(__file__).resolve().parents[1] / "src" / "haldio" / "web" / "static" / "style.css"
     ).read_text(encoding="utf-8")
     assert "box-shadow" in css  # cards lifted from the page
     assert "accent-color" in css  # one honest progress colour
@@ -1233,12 +1258,9 @@ def test_calm_look_polish_in_stylesheet() -> None:
 
 def test_section6_spacing_and_type_scale() -> None:
     css = (
-        Path(__file__).resolve().parents[1]
-        / "src" / "haldio" / "web" / "static" / "style.css"
+        Path(__file__).resolve().parents[1] / "src" / "haldio" / "web" / "static" / "style.css"
     ).read_text(encoding="utf-8")
-    for step, px in zip(
-        range(1, 7), ("4px", "8px", "12px", "16px", "24px", "32px"), strict=True
-    ):
+    for step, px in zip(range(1, 7), ("4px", "8px", "12px", "16px", "24px", "32px"), strict=True):
         assert f"--sp-{step}: {px};" in css  # one spacing scale for all gaps
     assert "h1 { font-size: 22px;" in css  # page title
     assert "h2 { font-size: 16px;" in css  # section titles
@@ -1262,7 +1284,7 @@ def test_section6_job_page_order(app_parts) -> None:
     (job_dir / "04_script" / "script.json").write_text('{"chunks": []}', encoding="utf-8")
     page = client.get(location).text
     positions = [
-        page.index('<h1>'),
+        page.index("<h1>"),
         page.index('id="job-status"'),
         page.index("summary-card"),
         page.index("Skript prüfen (optional)"),
@@ -1270,7 +1292,6 @@ def test_section6_job_page_order(app_parts) -> None:
         page.index("card-actions"),
     ]
     assert positions == sorted(positions)  # header, status, summary, hints, log, actions
-
 
 
 def test_delete_button_hidden_while_running(app_parts) -> None:
@@ -1491,10 +1512,18 @@ def test_review_counter_and_german_reasons(app_parts) -> None:
     job_id = _review_setup(
         app_parts,
         [
-            {"chunk_id": "c0001", "blocks": [{"kind": "paragraph", "text": "A."}],
-             "warnings": ["unclear_source"], "needs_review": False},
-            {"chunk_id": "c0002", "blocks": [{"kind": "paragraph", "text": "B."}],
-             "warnings": [], "needs_review": False},
+            {
+                "chunk_id": "c0001",
+                "blocks": [{"kind": "paragraph", "text": "A."}],
+                "warnings": ["unclear_source"],
+                "needs_review": False,
+            },
+            {
+                "chunk_id": "c0002",
+                "blocks": [{"kind": "paragraph", "text": "B."}],
+                "warnings": [],
+                "needs_review": False,
+            },
         ],
     )
     page = client.get(f"/jobs/{job_id}/review")

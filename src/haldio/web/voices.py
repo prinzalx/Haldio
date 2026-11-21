@@ -15,7 +15,10 @@ class SpeakerInfo:
     label: str
 
 
-SPEAKERS: tuple[SpeakerInfo, ...,] = (
+SPEAKERS: tuple[
+    SpeakerInfo,
+    ...,
+] = (
     SpeakerInfo("serena", "Serena"),
     SpeakerInfo("vivian", "Vivian"),
     SpeakerInfo("uncle_fu", "Onkel Fu"),

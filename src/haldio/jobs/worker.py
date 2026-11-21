@@ -225,9 +225,7 @@ class Worker:
                 "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
             }
 
-        def progress(
-            stage: str, value: int, note: str = "", page_count: int = 0
-        ) -> None:
+        def progress(stage: str, value: int, note: str = "", page_count: int = 0) -> None:
             if job_id in self._cancelled:
                 raise _Cancelled()
             done, total, marker, extra = _parse_note(note)
@@ -305,8 +303,10 @@ class Worker:
                 return  # memory is already free: continue with no pause
             manual = loaded is None
             job.status = "waiting_for_user"
-            detail = note if manual else (
-                f"LM Studio lädt noch: {', '.join(loaded)} · ich prüfe alle 5 Sekunden"
+            detail = (
+                note
+                if manual
+                else (f"LM Studio lädt noch: {', '.join(loaded)} · ich prüfe alle 5 Sekunden")
             )
             job.message = detail
             emit("waiting", "speaking", detail)
@@ -360,18 +360,14 @@ class Worker:
             folder = self.index.jobs_dir / job_id
             if job.options.get("resume_from") == "speaking":
                 language = job.language if job.language in ("de", "en") else "de"
-                result = run_speech(
-                    folder, cfg, language, progress=progress, gate=wait_gate
-                )
+                result = run_speech(folder, cfg, language, progress=progress, gate=wait_gate)
             else:
                 result = self._run_fn(
                     folder / "source.pdf",
                     cfg,
                     folder,
                     progress=progress,
-                    stop_after_script=bool(
-                        job.options.get("review", cfg.editor.review_before_tts)
-                    ),
+                    stop_after_script=bool(job.options.get("review", cfg.editor.review_before_tts)),
                     stop_before_tts=cfg.tts.confirm_before_start,
                     gate=wait_gate,
                     language=str(job.options.get("language", "auto")),
