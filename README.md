@@ -152,4 +152,4 @@ uv run python scripts/eval_editor.py
 
 ## License
 
-AGPL-3.0-only. PyMuPDF, used for PDF extraction, is itself AGPL — see `docs/decisions/`.
+AGPL-3.0-only. PyMuPDF, used for PDF extraction, is itself AGPL.
