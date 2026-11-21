@@ -115,4 +115,3 @@ def test_chat_stream_falls_back_when_server_ignores_stream() -> None:
         result = client.chat("s", "u", on_activity=count)
     assert result.text == "plain"
     assert calls["n"] == 0  # no live updates when the server does not stream
-

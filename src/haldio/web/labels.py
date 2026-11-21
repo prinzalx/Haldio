@@ -114,7 +114,7 @@ def stepper_state(job: Job) -> list[dict[str, Any]]:
             state = "done"
         elif status in ("failed", "cancelled"):
             stop = current if current is not None else 0
-            state = ("done" if index < stop else "failed" if index == stop else "pending")
+            state = "done" if index < stop else "failed" if index == stop else "pending"
         elif status == "queued":
             state = "waiting" if index == 0 else "pending"
         elif status in _WAITING_STAGE:

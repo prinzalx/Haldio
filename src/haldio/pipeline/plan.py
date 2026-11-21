@@ -185,9 +185,9 @@ def quick_summary(document: Document, max_items: int = 6) -> str:
 
 PLANNER_SYSTEM = (
     "You write the plan summary for an audiobook project. Read the outline of "
-    "the document and answer with JSON only: \"summary\" holds 5 to 8 "
+    'the document and answer with JSON only: "summary" holds 5 to 8 '
     "sentences about the whole document in the language of the document, "
-    "\"topics\" holds 3 to 8 main topics as short phrases."
+    '"topics" holds 3 to 8 main topics as short phrases.'
 )
 
 

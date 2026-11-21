@@ -141,7 +141,8 @@ def create_app(
     def job_status(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request, "partials/job_status.html",
+            request,
+            "partials/job_status.html",
             _job_context(app.state.index, job_id, job, config),
         )
 
@@ -295,8 +296,14 @@ def create_app(
         return templates.TemplateResponse(
             request,
             "partials/review_chunk.html",
-            {"job": job, "entry": entry, "saved_ci": ci, "saved": edit is not None,
-             "regen_error": error, "llm_ok": not error},
+            {
+                "job": job,
+                "entry": entry,
+                "saved_ci": ci,
+                "saved": edit is not None,
+                "regen_error": error,
+                "llm_ok": not error,
+            },
         )
 
     def _action_redirect(request: Request, job_id: str) -> RedirectResponse:
@@ -594,9 +601,7 @@ def _sample_dir(cfg: Config) -> Path:
     return cfg.paths.data_dir / "samples"
 
 
-def _speaker_context(
-    base: Config, eff: Config, selected: str | None = None
-) -> dict[str, Any]:
+def _speaker_context(base: Config, eff: Config, selected: str | None = None) -> dict[str, Any]:
     """Speaker radio rows (chosen one flagged, sample flag set) plus quality options."""
     rows = speaker_rows(selected or eff.tts.speaker or "dylan")
     for row in rows:
@@ -770,9 +775,7 @@ def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
                 "original": original,
                 "chapter": chapter,
                 "page": page,
-                "empty": not any(
-                    str(b.get("text", "")).strip() for b in chunk.get("blocks", [])
-                ),
+                "empty": not any(str(b.get("text", "")).strip() for b in chunk.get("blocks", [])),
                 "warnings": [warning_text(w) for w in chunk.get("warnings", [])],
                 "needs_review": bool(chunk.get("needs_review")),
             }
