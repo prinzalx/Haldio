@@ -23,7 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = sub.add_parser("run", help="Build the audiobook end to end (M3).")
     run_parser.add_argument("pdf", help="Path to the PDF file")
     run_parser.add_argument("-o", "--out", default=None, help="Output directory")
-    sub.add_parser("serve", help="Start the web interface (M4).")
+    serve_parser = sub.add_parser("serve", help="Start the web interface (M4).")
+    serve_parser.add_argument("--host", default=None, help="Bind address (default: config)")
+    serve_parser.add_argument("--port", type=int, default=None, help="Port (default: config)")
     script_parser = sub.add_parser("script", help="Build script.md and the QA report (M2).")
     script_parser.add_argument("pdf", help="Path to the PDF file")
     script_parser.add_argument("-o", "--out", default=None, help="Output directory")
@@ -135,6 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         import uvicorn
 
+        from haldio.settings_store import effective_config
         from haldio.web.app import create_app
 
         # job log lines also appear on the serve console (same text)
@@ -143,7 +146,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         worker_log = logging.getLogger("haldio.worker")
         worker_log.setLevel(logging.INFO)
         worker_log.addHandler(handler)
-        uvicorn.run(create_app(config), host=config.server.host, port=config.server.port)
+        # CLI flags win over the settings page, which wins over config.yaml
+        eff = effective_config(config)
+        host = args.host or eff.server.host
+        port = args.port if args.port is not None else eff.server.port
+        uvicorn.run(create_app(config), host=host, port=port)
         return 0
     if args.command is None:
         parser.print_help()

@@ -333,9 +333,27 @@ def test_failure_message_is_short_and_detail_holds_traceback(tmp_path) -> None:
     worker.enqueue(job.id)
     done = index.get(job.id)
     assert done.status == "failed"
-    assert done.message == "Vorlesen fehlgeschlagen."
+    assert done.message == "Umwandeln in Sprache fehlgeschlagen."
     assert "Traceback" in done.error_detail
     assert "empty audio" in done.error
+
+
+def test_job_voice_from_upload_page_reaches_tts_config(tmp_path) -> None:
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.tts.speaker = "dylan"
+    index = JobIndex(tmp_path / "data")
+    seen: dict[str, str] = {}
+
+    def probe_run(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        seen["speaker"] = cfg.tts.speaker
+        raise RuntimeError("stop here")
+
+    job = index.create("x.pdf")
+    job.options["voice"] = "vivian"
+    index.update(job)
+    Worker(index, config, run_fn=probe_run, inline=True).enqueue(job.id)
+    assert seen["speaker"] == "vivian"
 
 
 def test_worker_cancel_queued_job(tmp_path) -> None:
@@ -844,7 +862,7 @@ def test_job_page_summary_card_from_doc_map(app_parts) -> None:
     page = client.get(location)
     assert "Zusammenfassung" in page.text
     assert "1 h 10 min" in page.text
-    assert "Technik" in page.text
+    assert "Themen" not in page.text  # the topics row was dropped from the card
 
 
 def test_topbar_marks_the_active_page(app_parts) -> None:
@@ -1100,7 +1118,8 @@ def test_settings_advanced_card_holds_rare_settings(app_parts) -> None:
     page = client.get("/settings").text
     assert "Erweitert" in page and "<details" in page  # collapsed card
     assert "Neustart nötig" in page
-    assert 'name="server.port"' not in page  # host/port are display only
+    assert 'name="server.host"' in page and 'name="server.port"' in page
+    assert "readonly" not in page  # server fields are editable now
     assert "API-Schlüssel" in page and "lm-studio" not in page  # key never shown
     for field in (
         "llm.timeout_s",
@@ -1111,6 +1130,22 @@ def test_settings_advanced_card_holds_rare_settings(app_parts) -> None:
     ):
         assert f'name="{field}"' in page
     assert "Pause nach Absatz" in page and "Pause nach Kapitel" in page
+
+
+def test_settings_server_host_port_save_and_validate(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    form = dict(_SETTINGS_FORM, **{"server.host": "0.0.0.0", "server.port": "9000"})
+    response = client.post("/settings", data=form, follow_redirects=False)
+    assert response.status_code == 303
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(encoding="utf-8")
+    assert "host: 0.0.0.0" in text and "port: 9000" in text
+    page = client.get("/settings").text
+    assert 'value="0.0.0.0"' in page  # stored value shows up in the form
+    bad = dict(_SETTINGS_FORM, **{"server.port": "abc"})
+    page = client.post("/settings", data=bad)
+    assert page.status_code == 422
+    assert "Port: ganze Zahl von 1 bis 65535." in page.text
 
 
 def test_settings_api_key_status_words(app_parts, monkeypatch) -> None:
@@ -1326,7 +1361,7 @@ def test_summary_card_shows_placeholders_while_building(app_parts) -> None:
     doc_map.parent.mkdir(parents=True, exist_ok=True)
     doc_map.write_text('{"language": "de"}', encoding="utf-8")
     page = client.get(location)
-    assert page.text.count("Wird erstellt …") == 2  # summary and topics
+    assert page.text.count("Wird erstellt …") == 1  # summary only (topics row dropped)
     assert "Geschätzte Länge" not in page.text
 
 
