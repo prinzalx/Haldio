@@ -294,3 +294,17 @@ became a time-shifted process.
 - Explain unloading: fixed - the awaiting_tts note-box explains eject model / stop server in neutral yellow with numbered steps (red only for errors).
 - Pre-speech live checklist: fixed - checklist "Sprachmodell entladen / TTS-Server / Stimme" shown for awaiting_tts, waiting_for_user and speaking with live states.
 - Tests: 121 pass - polling attrs per state (parametrized), gate auto-continue with fake guard (["bubo"] → []), manual gate fallback (guard None), stepper table.
+
+## Correction 5 - section 3 Review page
+
+- German intro: fixed - the review page explains what to do and that empty sections are read in their original text.
+- Readable headings: fixed - each section shows the chapter path + "Seite N" (page_span start from the chunk input file).
+- German reasons: fixed - warning_text maps every editor code to German (unclear_source -> "Quelle schwer lesbar" etc.); a raw code no longer appears in the HTML.
+- Empty section: fixed - warning "Für diesen Abschnitt gibt es keinen Hörtext."; every section has an input field (empty ones get one too); buttons "Original übernehmen" (copies the original text) and "Neu erzeugen" (editor LLM, shown only when reachable).
+- editor.fallback_to_source: fixed - new config option (default true); synthesize_script reads the ORIGINAL text of empty sections (after the normalizer) and counts them; SpeakResult.empty_sections.
+- Log + QA + count: fixed - speaking logs "N Abschnitte ohne Hörtext – es wird der Originaltext vorgelesen."; qa.json/qa_report.html mark "kein Hörtext" and count "ohne Hörtext: N"; the review page header counts "X von Y Abschnitten mit Hinweis".
+- Truncated originals: investigated - the stored original (03_edit/chunks/*.in.json) is complete; the truncation was only visual (tiny monospace font + fixed 260px box). Original and script now use the same font and size and wrap long lines.
+- Speichern: fixed - the button starts disabled and enables only after a real change in that chunk (JS); after saving it shows "Gespeichert".
+- Filter: fixed - clear label "Nur Abschnitte mit Hinweis anzeigen"; empty sections are hidden by it too.
+- Job page: fixed - the entry reads "Skript prüfen (optional)" with the hint count ("· 12 Hinweise").
+- Tests: 125 pass - empty-section input + buttons, use_original copies text, counter + German reasons + no raw code, fallback in synthesize_script (on and off).

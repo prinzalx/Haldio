@@ -78,6 +78,33 @@
     btn.classList.add("busy");
     if (btn.dataset.busy !== undefined) btn.textContent = "Wird gestartet …";
   });
+  // review: "Speichern" stays disabled until this chunk really changed
+  (function () {
+    const state = (form) => {
+      const btn = form.querySelector("button[data-save]");
+      if (!btn) return;
+      let changed = false;
+      form.querySelectorAll("textarea").forEach((t) => { if (t.value !== t.dataset.initial) changed = true; });
+      btn.disabled = !changed;
+    };
+    const init = (root) => {
+      (root || document).querySelectorAll("form button[data-save]").forEach((btn) => {
+        const form = btn.closest("form");
+        form.querySelectorAll("textarea").forEach((t) => {
+          if (t.dataset.initial === undefined) t.dataset.initial = t.value;
+        });
+        state(form);
+      });
+    };
+    document.addEventListener("input", (e) => {
+      if (e.target.matches && e.target.matches("textarea")) {
+        const form = e.target.closest("form");
+        if (form) state(form);
+      }
+    });
+    init(document);
+    document.addEventListener("htmx:afterSwap", (e) => init(e.target));
+  })();
   // a page that was hidden refreshes its status right away
   const refreshStatus = () => {
     const el = document.getElementById("job-status");

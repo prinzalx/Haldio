@@ -8,7 +8,8 @@
   {% include "partials/job_status.html" %}
   {% include "partials/logtail.html" %}
   <div class="actions">
-    {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen</a>{% endif %}
+    {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen (optional)
+      {%- if review_hints %} · {{ review_hints }} Hinweis{{ "e" if review_hints != 1 }}{% endif %}</a>{% endif %}
     <button class="danger" type="button" onclick="document.getElementById('del-job').showModal()">🗑 Löschen</button>
     <dialog id="del-job">
       <form method="post" action="/jobs/{{ job.id }}/delete">

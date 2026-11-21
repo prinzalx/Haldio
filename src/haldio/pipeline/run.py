@@ -210,6 +210,8 @@ def run_script(
             client.close()
     _run_hook("after_edit", config.hooks.after_edit)
 
+    for edit, entry in zip(edits, qa, strict=True):
+        entry.no_script = edit.result is None or not edit.result.blocks
     _write_json(out_dir / "03_edit" / "qa.json", [asdict(c) for c in qa])
     script_md, data = assemble_script(edits)
     write_script(out_dir, script_md, data)
@@ -302,10 +304,18 @@ def run_book(
             progress=lambda done, total, note="": report(
                 "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total} {note}".strip()
             ),
+            fallback_source=config.editor.fallback_to_source,
         )
     finally:
         backend.close()
     _run_hook("after_speak", config.hooks.after_speak)
+    if spoken.empty_sections and config.editor.fallback_to_source:
+        report(
+            "speaking",
+            65,
+            f"{spoken.empty_sections} Abschnitte ohne Hörtext – "
+            "es wird der Originaltext vorgelesen #summary",
+        )
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
 
@@ -350,10 +360,18 @@ def run_speech(
             progress=lambda done, total, note="": report(
                 "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total} {note}".strip()
             ),
+            fallback_source=config.editor.fallback_to_source,
         )
     finally:
         backend.close()
     _run_hook("after_speak", config.hooks.after_speak)
+    if spoken.empty_sections and config.editor.fallback_to_source:
+        report(
+            "speaking",
+            65,
+            f"{spoken.empty_sections} Abschnitte ohne Hörtext – "
+            "es wird der Originaltext vorgelesen #summary",
+        )
     if not spoken.ok:
         return BookResult(script, spoken, MasterResult(error=spoken.error))
     report("mastering", 90)

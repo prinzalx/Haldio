@@ -60,12 +60,29 @@ class SpeakResult:
     synthesized: int = 0
     cached: int = 0
     total_seconds: float = 0.0
+    empty_sections: int = 0
     failed_units: list[str] = field(default_factory=list)
     error: str = ""
 
     @property
     def ok(self) -> bool:
         return not self.error and bool(self.units)
+
+
+def _original_blocks(out_dir: Path, chunk_id: str) -> list[dict[str, Any]]:
+    """Blocks of the chunk INPUT file, mapped to script block shape."""
+    src = out_dir / "03_edit" / "chunks" / f"{chunk_id}.in.json"
+    if not src.is_file():
+        return []
+    try:
+        data = json.loads(src.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    blocks = []
+    for block in data.get("blocks", []):
+        kind = "heading" if block.get("type") == "heading" else "paragraph"
+        blocks.append({"kind": kind, "level": block.get("level"), "text": block.get("text", "")})
+    return blocks
 
 
 def synthesize_script(
@@ -77,12 +94,15 @@ def synthesize_script(
     language: str,
     pronunciations: dict[str, str] | None = None,
     progress: Callable[..., None] | None = None,
+    fallback_source: bool = False,
 ) -> SpeakResult:
     """Synthesize every script block in order; write 05_speak/units.json + WAV files.
 
     progress(done, total, note) counts ALL units: cached ones report with a
     "#cache" marker during the scan, real ones report from the backend with
     an "#ok" / "#fail" marker and a duration note.
+    fallback_source reads the ORIGINAL text (from the chunk input file) for
+    sections whose script is empty.
     """
     units_dir = out_dir / "05_speak" / "units"
     units_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +111,12 @@ def synthesize_script(
     pending: list[tuple[str, Path]] = []
     was_cached: list[bool] = []
     for chunk in script_data.get("chunks", []):
-        for block in chunk.get("blocks", []):
+        blocks = list(chunk.get("blocks", []))
+        if not any(str(b.get("text", "")).strip() for b in blocks):
+            result.empty_sections += 1
+            if fallback_source:
+                blocks = _original_blocks(out_dir, str(chunk.get("chunk_id", "")))
+        for block in blocks:
             spoken = make_speakable(block.get("text", ""), language, pronunciations)
             for piece in _merge_letterless_units(
                 split_units(spoken, tts_config.max_chars_per_unit)

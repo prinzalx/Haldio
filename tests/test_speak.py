@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 
 import pytest
@@ -113,6 +114,29 @@ def test_master_merges_units(tmp_path) -> None:
     result = make_master(tmp_path, ["mp3"], {"paragraph": 100, "heading": 200, "chapter": 300})
     assert result.ok
     assert (tmp_path / "06_master" / "book.mp3").stat().st_size > 0
+
+
+def test_synthesize_script_fallback_reads_original(tmp_path) -> None:
+    """An empty script section falls back to the ORIGINAL text from the chunk input."""
+    from haldio.config import TtsConfig
+
+    (tmp_path / "03_edit" / "chunks").mkdir(parents=True)
+    (tmp_path / "03_edit" / "chunks" / "c0001.in.json").write_text(
+        json.dumps({"blocks": [{"type": "paragraph", "text": "Original text."}]}),
+        encoding="utf-8",
+    )
+    data = {"chunks": [{"chunk_id": "c0001", "blocks": []}]}
+    result = synthesize_script(
+        data, MockTTSBackend(), "mock", TtsConfig(), tmp_path, "de", fallback_source=True
+    )
+    assert result.empty_sections == 1
+    assert [u["text"] for u in result.units] == ["Original text."]
+    # without the fallback the empty section produces no units at all
+    result = synthesize_script(
+        data, MockTTSBackend(), "mock", TtsConfig(), tmp_path, "de", fallback_source=False
+    )
+    assert result.empty_sections == 1
+    assert result.units == []
 
 
 def test_run_book_end_to_end(tmp_path) -> None:

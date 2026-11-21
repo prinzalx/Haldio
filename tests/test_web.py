@@ -715,11 +715,91 @@ def test_review_chunk_save_swaps_partial(app_parts) -> None:
     response = client.post(f"/jobs/{job_id}/review/chunk", data={"ci": "0", "c0b0": "Neuer Text."})
     assert response.status_code == 200
     assert "Gespeichert" in response.text
-    assert "unclear_source: Absatz 2." in response.text
+    assert "Quelle schwer lesbar: Absatz 2." in response.text
     saved = json.loads(script_file.read_text(encoding="utf-8"))
     assert saved["chunks"][0]["blocks"][0]["text"] == "Neuer Text."
     markdown = (script_file.parent / "script.md").read_text(encoding="utf-8")
     assert "Neuer Text." in markdown
+
+
+def _review_setup(app_parts, chunks, in_json=None) -> str:
+    """Write a script.json (and one chunk input file) for the review tests."""
+    import json
+
+    _app, index, _calls = app_parts
+    client = TestClient(_app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    folder = index.jobs_dir / job_id
+    (folder / "04_script").mkdir(parents=True, exist_ok=True)
+    (folder / "04_script" / "script.json").write_text(
+        json.dumps({"chunks": chunks}, ensure_ascii=False), encoding="utf-8"
+    )
+    if in_json is not None:
+        target = folder / "03_edit" / "chunks"
+        target.mkdir(parents=True, exist_ok=True)
+        for name, payload in in_json.items():
+            (target / name).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return job_id
+
+
+def test_review_empty_section_has_input_and_buttons(app_parts) -> None:
+    _app, _index, _calls = app_parts
+    client = TestClient(_app)
+    job_id = _review_setup(
+        app_parts,
+        [{"chunk_id": "c0001", "blocks": [], "warnings": [], "needs_review": False}],
+        {
+            "c0001.in.json": {
+                "chapter_path": "Erstes Kapitel > Anfänge",
+                "page_span": [17, 18],
+                "blocks": [{"type": "paragraph", "text": "Ursprünglicher Text."}],
+            }
+        },
+    )
+    page = client.get(f"/jobs/{job_id}/review")
+    assert page.status_code == 200
+    assert "Für diesen Abschnitt gibt es keinen Hörtext." in page.text
+    assert "Original übernehmen" in page.text
+    assert 'name="c0b0"' in page.text
+    assert "Seite 17" in page.text
+    assert "Erstes Kapitel &gt; Anfänge" in page.text
+
+
+def test_review_use_original_copies_text(app_parts) -> None:
+    import json
+
+    _app, index, _calls = app_parts
+    client = TestClient(_app)
+    job_id = _review_setup(
+        app_parts,
+        [{"chunk_id": "c0001", "blocks": [], "warnings": [], "needs_review": False}],
+        {"c0001.in.json": {"blocks": [{"type": "paragraph", "text": "Ursprünglicher Text."}]}},
+    )
+    response = client.post(f"/jobs/{job_id}/review/use_original", data={"ci": "0"})
+    assert response.status_code == 200
+    assert "Ursprünglicher Text." in response.text
+    script_file = index.jobs_dir / job_id / "04_script" / "script.json"
+    saved = json.loads(script_file.read_text(encoding="utf-8"))
+    assert saved["chunks"][0]["blocks"][0]["text"] == "Ursprünglicher Text."
+
+
+def test_review_counter_and_german_reasons(app_parts) -> None:
+    _app, _index, _calls = app_parts
+    client = TestClient(_app)
+    job_id = _review_setup(
+        app_parts,
+        [
+            {"chunk_id": "c0001", "blocks": [{"kind": "paragraph", "text": "A."}],
+             "warnings": ["unclear_source"], "needs_review": False},
+            {"chunk_id": "c0002", "blocks": [{"kind": "paragraph", "text": "B."}],
+             "warnings": [], "needs_review": False},
+        ],
+    )
+    page = client.get(f"/jobs/{job_id}/review")
+    assert "1 von 2 Abschnitten mit Hinweis" in page.text
+    assert "Quelle schwer lesbar" in page.text
+    assert "unclear_source" not in page.text
 
 
 def test_worker_reports_units_and_resume_language(tmp_path) -> None:

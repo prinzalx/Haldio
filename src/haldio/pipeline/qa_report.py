@@ -16,6 +16,7 @@ class ChunkQA:
     chunk_id: str
     issues: list[Issue] = field(default_factory=list)
     needs_review: bool = False
+    no_script: bool = False
 
     @property
     def errors(self) -> list[Issue]:
@@ -37,14 +38,17 @@ def render_qa_html(qa: list[ChunkQA], doc_meta: dict[str, Any]) -> str:
     total_errors = sum(len(c.errors) for c in qa)
     total_warnings = sum(len(c.warnings) for c in qa)
     review = [c for c in qa if c.needs_review]
+    no_script = [c for c in qa if c.no_script]
     rows: list[str] = []
     for chunk in qa:
         badge = "ok"
-        if chunk.errors:
+        if chunk.errors or chunk.no_script:
             badge = "review"
         elif chunk.warnings:
             badge = "warn"
         detail = "; ".join(f"{i.rule}:{_esc(i.detail)[:60]}" for i in chunk.issues)
+        if chunk.no_script:
+            detail = f"kein Hörtext; {detail}"
         rows.append(
             f"<tr class='{badge}'><td>{chunk.chunk_id}</td>"
             f"<td>{badge}</td><td>{len(chunk.errors)}</td>"
@@ -59,7 +63,7 @@ def render_qa_html(qa: list[ChunkQA], doc_meta: dict[str, Any]) -> str:
         "tr.review{background:#f8d7da}tr.warn{background:#fff3cd}</style></head><body>"
         f"<h1>QA report: {title}</h1>"
         f"<p>Chunks: {len(qa)} · errors: {total_errors} · warnings: {total_warnings} · "
-        f"needs review: {len(review)}</p>"
+        f"needs review: {len(review)} · ohne Hörtext: {len(no_script)}</p>"
         "<table><tr><th>chunk</th><th>state</th><th>errors</th><th>warnings</th>"
         "<th>detail</th></tr>" + "".join(rows) + "</table></body></html>"
     )

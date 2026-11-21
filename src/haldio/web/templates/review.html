@@ -5,9 +5,12 @@
   <h1>📝 Skript — {{ job.file_name }}</h1>
   {% if not entries %}<p class="muted">Noch kein Skript vorhanden.</p>{% endif %}
   {% if entries %}
+  <p class="muted">Lesen Sie jeden Abschnitt durch und verbessern Sie ihn bei Bedarf.
+     Ein Abschnitt ohne Hörtext wird später in seinem Originaltext vorgelesen.</p>
   <p class="filter">
-    <label><input type="checkbox" onchange="document.getElementById('chunks').classList.toggle('only-warn', this.checked)">
-      Nur Warnungen anzeigen</label>
+    <strong>{{ hint_count }} von {{ entries | length }} Abschnitten mit Hinweis</strong>
+    · <label><input type="checkbox" onchange="document.getElementById('chunks').classList.toggle('only-warn', this.checked)">
+      Nur Abschnitte mit Hinweis anzeigen</label>
   </p>
   {% endif %}
   <div id="chunks" class="chunks">

@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,7 +19,11 @@ from haldio import __version__
 from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
 from haldio.jobs.worker import Worker
+from haldio.llm import LlmClient
+from haldio.llm.client import llm_reachable
 from haldio.pipeline.assemble import render_script_md
+from haldio.pipeline.edit import load_prompt_version, system_with_examples
+from haldio.pipeline.run import edit_chunk_with_retry
 from haldio.tts.base import ModelGuardError
 from haldio.web.labels import status_label, stepper_state, warning_text
 
@@ -97,9 +101,10 @@ def create_app(
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     def job_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
-        return templates.TemplateResponse(
-            request, "job.html", _job_context(app.state.index, job_id, job, config)
-        )
+        context = _job_context(app.state.index, job_id, job, config)
+        if context["has_script"]:
+            context["review_hints"] = _hint_count(_review_entries(app.state.index, job_id))
+        return templates.TemplateResponse(request, "job.html", context)
 
     @app.get("/api/jobs/{job_id}")
     def job_api(job_id: str) -> dict[str, Any]:
@@ -146,7 +151,16 @@ def create_app(
     def review_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         entries = _review_entries(app.state.index, job_id)
-        return templates.TemplateResponse(request, "review.html", {"job": job, "entries": entries})
+        return templates.TemplateResponse(
+            request,
+            "review.html",
+            {
+                "job": job,
+                "entries": entries,
+                "hint_count": _hint_count(entries),
+                "llm_ok": llm_reachable(config.llm),
+            },
+        )
 
     @app.post("/jobs/{job_id}/review")
     async def review_save(job_id: str, request: Request) -> RedirectResponse:
@@ -156,10 +170,7 @@ def create_app(
         data = json.loads(script_file.read_text(encoding="utf-8")) if script_file.is_file() else {}
         chunks = data.get("chunks", [])
         for ci, chunk in enumerate(chunks):
-            for bi, block in enumerate(chunk.get("blocks", [])):
-                key = f"c{ci}b{bi}"
-                if key in form:
-                    block["text"] = str(form[key]).strip()
+            _apply_chunk_form(chunk, form, ci)
         _write_script_files(script_file, data, chunks)
         return RedirectResponse(f"/jobs/{job_id}/review", status_code=303)
 
@@ -178,16 +189,87 @@ def create_app(
         chunks = data.get("chunks", [])
         if ci < 0 or ci >= len(chunks):
             raise HTTPException(status_code=404, detail="Chunk nicht gefunden.")
-        for bi, block in enumerate(chunks[ci].get("blocks", [])):
-            key = f"c{ci}b{bi}"
-            if key in form:
-                block["text"] = str(form[key]).strip()
+        _apply_chunk_form(chunks[ci], form, ci)
         _write_script_files(script_file, data, chunks)
         entry = _review_entries(app.state.index, job_id)[ci]
         return templates.TemplateResponse(
             request,
             "partials/review_chunk.html",
             {"job": job, "entry": entry, "saved_ci": ci, "saved": True},
+        )
+
+    @app.post("/jobs/{job_id}/review/use_original", response_class=HTMLResponse)
+    async def review_use_original(job_id: str, request: Request) -> HTMLResponse:
+        """Empty script section: copy the ORIGINAL text in as the spoken text."""
+        job = _require_job(app.state.index, job_id)
+        form = await request.form()
+        ci = _form_ci(form)
+        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
+        data = json.loads(script_file.read_text(encoding="utf-8")) if script_file.is_file() else {}
+        chunks = data.get("chunks", [])
+        if ci >= len(chunks):
+            raise HTTPException(status_code=404, detail="Chunk nicht gefunden.")
+        original = _review_entries(app.state.index, job_id)[ci]["original"]
+        if not original.strip():
+            raise HTTPException(status_code=409, detail="Kein Originaltext gefunden.")
+        chunks[ci]["blocks"] = [{"kind": "paragraph", "level": None, "text": original.strip()}]
+        _write_script_files(script_file, data, chunks)
+        entry = _review_entries(app.state.index, job_id)[ci]
+        return templates.TemplateResponse(
+            request,
+            "partials/review_chunk.html",
+            {"job": job, "entry": entry, "saved_ci": ci, "saved": True},
+        )
+
+    @app.post("/jobs/{job_id}/review/regenerate", response_class=HTMLResponse)
+    async def review_regenerate(job_id: str, request: Request) -> HTMLResponse:
+        """Empty script section: ask the editor LLM for a new Hörtext."""
+        job = _require_job(app.state.index, job_id)
+        form = await request.form()
+        ci = _form_ci(form)
+        script_file = app.state.index.jobs_dir / job_id / "04_script" / "script.json"
+        data = json.loads(script_file.read_text(encoding="utf-8")) if script_file.is_file() else {}
+        chunks = data.get("chunks", [])
+        if ci >= len(chunks):
+            raise HTTPException(status_code=404, detail="Chunk nicht gefunden.")
+        src = (
+            app.state.index.jobs_dir
+            / job_id
+            / "03_edit"
+            / "chunks"
+            / f"{chunks[ci].get('chunk_id', '')}.in.json"
+        )
+        if not src.is_file():
+            raise HTTPException(status_code=409, detail="Kein Originaltext gefunden.")
+        chunk_input = json.loads(src.read_text(encoding="utf-8"))
+        error = ""
+        edit = None
+        try:
+            system_prompt, examples = load_prompt_version(config)
+            client = LlmClient(config.llm)
+            try:
+                edit, _issues = edit_chunk_with_retry(
+                    chunk_input,
+                    client,
+                    system_with_examples(system_prompt, examples),
+                    str(job.options.get("language") or "de"),
+                    config.editor.max_retries,
+                )
+            finally:
+                client.close()
+        except Exception as exc:  # noqa: BLE001 - the page must stay usable
+            edit, error = None, f"Sprachmodell nicht erreichbar: {exc}"
+        if edit is not None and edit.result is not None and edit.result.blocks:
+            chunks[ci]["blocks"] = [b.model_dump() for b in edit.result.blocks]
+            chunks[ci]["warnings"] = [w.type for w in edit.result.warnings]
+            chunks[ci]["needs_review"] = edit.needs_review
+            _write_script_files(script_file, data, chunks)
+        entry = _review_entries(app.state.index, job_id)[ci]
+        return templates.TemplateResponse(
+            request,
+            "partials/review_chunk.html",
+            {"job": job, "entry": entry, "saved_ci": ci, "saved": edit is not None,
+             "regen_error": error, "llm_ok": not error},
         )
 
     def _action_redirect(request: Request, job_id: str) -> RedirectResponse:
@@ -395,6 +477,34 @@ def _activity_info(job: Job) -> dict[str, Any]:
     return {"activity_age": age, "activity_stale": stale}
 
 
+def _form_ci(form: Mapping[str, str]) -> int:
+    try:
+        return int(str(form.get("ci", "")))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Chunk-Nummer fehlt.") from None
+
+
+def _apply_chunk_form(chunk: dict[str, Any], form: Mapping[str, str], ci: int) -> None:
+    """Write every c{ci}b{index} form field into the chunk (adds missing blocks)."""
+    prefix = f"c{ci}b"
+    blocks = chunk.setdefault("blocks", [])
+    for key in form:
+        if not str(key).startswith(prefix):
+            continue
+        try:
+            bi = int(str(key)[len(prefix) :])
+        except ValueError:
+            continue
+        while len(blocks) <= bi:
+            blocks.append({"kind": "paragraph", "level": None, "text": ""})
+        blocks[bi]["text"] = str(form[key]).strip()
+
+
+def _hint_count(entries: list[dict[str, Any]]) -> int:
+    """Sections with warnings, a review mark or a missing Hörtext."""
+    return sum(1 for e in entries if e["warnings"] or e["needs_review"] or e["empty"])
+
+
 def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
     """Per chunk: script blocks, original text, chapter title and readable warnings."""
     folder = index.jobs_dir / job_id
@@ -402,6 +512,7 @@ def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
     for ci, chunk in enumerate(_load_chunks(folder / "04_script" / "script.json")):
         original = ""
         chapter = ""
+        page = None
         src = folder / "03_edit" / "chunks" / f"{chunk.get('chunk_id', '')}.in.json"
         if src.is_file():
             try:
@@ -410,12 +521,19 @@ def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
                 src_data = {}
             original = "\n".join(str(b.get("text", "")) for b in src_data.get("blocks", []))
             chapter = str(src_data.get("chapter_path") or "")
+            span = src_data.get("page_span")
+            if isinstance(span, list) and span and isinstance(span[0], int):
+                page = span[0]
         entries.append(
             {
                 "chunk": chunk,
                 "ci": ci,
                 "original": original,
                 "chapter": chapter,
+                "page": page,
+                "empty": not any(
+                    str(b.get("text", "")).strip() for b in chunk.get("blocks", [])
+                ),
                 "warnings": [warning_text(w) for w in chunk.get("warnings", [])],
                 "needs_review": bool(chunk.get("needs_review")),
             }

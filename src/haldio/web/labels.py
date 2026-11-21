@@ -124,10 +124,23 @@ def stepper_state(job: Job) -> list[dict[str, Any]]:
     return rows
 
 
+# editor warning codes -> readable German reason (never show the raw code)
+REASON_GERMAN = {
+    "table_large": "Große Tabelle",
+    "formula_complex": "Komplizierte Formel",
+    "code_omitted": "Code weggelassen",
+    "ambiguous_reference": "Bezug nicht eindeutig",
+    "unclear_source": "Quelle schwer lesbar",
+    "needs_review": "Abschnitt zur Prüfung",
+    "no_script": "Kein Hörtext",
+    "other": "Hinweis",
+}
+
+
 def warning_text(warning: object) -> str:
     """A readable German line for one editor warning (dict or plain string)."""
     if isinstance(warning, dict):
-        kind = str(warning.get("type", "other"))
+        kind = REASON_GERMAN.get(str(warning.get("type", "other")), "Hinweis")
         detail = str(warning.get("detail", "")).strip()
         return f"{kind}: {detail}" if detail else kind
-    return str(warning)
+    return REASON_GERMAN.get(str(warning).strip(), str(warning))

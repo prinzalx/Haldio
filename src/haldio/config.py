@@ -57,6 +57,7 @@ class EditorConfig(BaseModel):
     fidelity_check: bool = True
     max_retries: int = 2
     review_before_tts: bool = False
+    fallback_to_source: bool = True
 
 
 class PauseConfig(BaseModel):
