@@ -974,6 +974,10 @@ def test_settings_speaker_card_lists_nine_speakers(app_parts) -> None:
     row = page.split('value="dylan"', 1)[1][:30]
     assert "checked" in row  # the chosen speaker is marked
     assert "Hörprobe erzeugen" in page
+    assert page.count("Hörprobe erzeugen") == 1  # one button by the test text
+    assert 'id="probe-btn"' in page
+    assert ":checked" in page  # button reads the voice selected by radio
+    assert "f-probe-text" in page  # and the Testtext field from the hx-vals
     assert "vorher das LLM entladen" in page  # guard warning text
     assert 'id="f-lang"' in page  # Sprache stays Automatisch/Deutsch/Englisch
 
@@ -983,6 +987,7 @@ def test_settings_sample_endpoint_with_mock(app_parts) -> None:
     client = TestClient(app)
     response = client.post("/settings/sample", data={"voice": "dylan"})
     assert response.status_code == 200
+    assert "Hörprobe fertig: Dylan" in response.text
     data_dir = app.state.config.paths.data_dir
     assert (data_dir / "samples" / "dylan.wav").is_file()
     assert "<audio" in response.text

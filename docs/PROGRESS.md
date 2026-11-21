@@ -423,6 +423,20 @@ became a time-shifted process.
 Stop - waiting for the owner's OK on the screenshots.
 
 
+## Settings fix 2026-11-21 - one probe button, selected voice
+
+- Bug (owner screenshot): rows with an existing sample rendered only an audio
+  player, so only a voice WITHOUT a sample (ryan) had a button and always that
+  row's voice was probed; "Hörprobe fertig" appeared misaligned under a row.
+- Fix: single "Hörprobe erzeugen" button next to the Testtext input
+  (`probe-btn`, htmx hx-vals sends the CHECKED radio's voice + text +
+  language); result swaps into `#probe-result` beside the button and names
+  the voice ("Hörprobe fertig: Dylan"). Proof:
+  `test_settings_speaker_card_lists_nine_speakers` (one button, `:checked`
+  and `f-probe-text` in hx-vals), `test_settings_sample_endpoint_with_mock`
+  (label in response). 177 tests pass; screenshots regenerated; reviewer
+  accepted.
+
 ## Owner package 2026-11-21 - settings probes, old findings, batch upload
 
 - Hörprobe test text: done - `POST /settings/sample` takes `text` + `language`;

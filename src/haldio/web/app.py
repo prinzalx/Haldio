@@ -39,7 +39,7 @@ from haldio.settings_store import (
 )
 from haldio.tts.base import ModelGuardError
 from haldio.web.labels import stage_help, status_label, stepper_state, warning_text
-from haldio.web.voices import speaker_rows
+from haldio.web.voices import SPEAKERS, speaker_rows
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -505,8 +505,12 @@ def create_app(
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(audio.data)
             stamp = int(datetime.now(UTC).timestamp())
+            label = next(
+                (s.label for s in SPEAKERS if s.id == voice),
+                voice,
+            )
             body = (
-                '<span class="result-ok">Hörprobe fertig</span> '
+                f'<span class="result-ok">Hörprobe fertig: {label}</span> '
                 f'<audio controls src="/samples/{voice}.wav?v={stamp}"></audio>'
             )
             return HTMLResponse(body)
