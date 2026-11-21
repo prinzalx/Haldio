@@ -332,11 +332,11 @@ became a time-shifted process.
 
 ## Correction 5 - sections 6-8 Look, top bar, settings
 
-- Section 6, calm polished look: partial - cards carry a subtle shadow; links show underline only on hover; live buttons brighten on hover (disabled stay calm); progress bars use one accent colour; job rows have a soft hover line; the log box scrolls with a thin scrollbar. Merged a second dead `button:disabled` rule after the review.
+- Section 6, calm polished look: done - cards carry a subtle shadow; links show underline only on hover; live buttons brighten on hover (disabled stay calm); progress bars use one accent colour; job rows have a soft hover line; the log box scrolls with a thin scrollbar. Merged a second dead `button:disabled` rule after the review. Correction 6 gap closed 2026-11-21: one spacing scale `--sp-1..--sp-6` (4/8/12/16/24/32 px) now used by main, cards, headings, card-actions and the stepper; title 22 px bold, section titles 16 px, meta text 14 px; the stepper is a vertical list below 640 px; job page order is header -> status block -> summary (own card) -> hints -> "Technische Details" -> action bar. Proof: `test_section6_spacing_and_type_scale`, `test_section6_job_page_order`. Width checks 360/768/1280 come with the section 9 screenshot set.
 - Section 7, top bar: partial - the bar sticks to the top while scrolling; the current page is marked in the navigation (`aria-current="page"`, accent colour); job pages mark neither link.
 - Section 8, settings page: partial - the effective-config table also shows the data directory ("Daten") and the editor prompt version ("Hörtext-Prompt"); no secrets are rendered (the API key stays out of the page).
 - Tests: 133 pass - stylesheet assertions for the polish rules, active-page marking per route, settings rows.
-- MISSING (delta check 2026-11-21, see correction-6.md section 1): section 6 spacing scale and 22/16/14 px hierarchy, vertical stepper below 640 px, summary as own card; section 7 dev-text removal and second Buecherei link; section 8 the real editable settings page.
+- MISSING (delta check 2026-11-21, see correction-6.md section 1): section 6 done 2026-11-21 (see line above); section 7 dev-text removal and second Buecherei link; section 8 the real editable settings page.
 
 ## Correction 5 - section 9 Tests, screenshots, finish
 

@@ -7,6 +7,31 @@
     · {% endif %}hochgeladen {{ job.created_at | date }}{% if job.page_count %}
     · {{ job.page_count }} Seiten{% endif %}</p>
   {% include "partials/job_status.html" %}
+</section>
+{% if summary %}
+<section class="card summary-card">
+  <h2>📋 Zusammenfassung</h2>
+  {% if summary.summary %}<p>{{ summary.summary }}</p>
+  {% else %}<p class="muted">Wird erstellt …</p>{% endif %}
+  <p><strong>Themen:</strong>
+    {% if summary.main_topics %}{{ summary.main_topics | join(", ") }}
+    {% else %}<span class="muted">Wird erstellt …</span>{% endif %}</p>
+  {% if summary.language or summary.estimated_audio_seconds %}
+  <p>{% if summary.language %}<strong>Sprache:</strong> {{ summary.language }}{% endif %}
+    {% if summary.estimated_audio_seconds %}
+    · <strong>Geschätzte Länge:</strong> {{ summary.estimated_audio_seconds | seconds }}
+    {% endif %}</p>
+  {% endif %}
+  {% if summary.warnings %}
+  <p class="warn-text">{% for w in summary.warnings %}⚠ {{ w }}{% if not loop.last %};{% endif %}{% endfor %}</p>
+  {% endif %}
+</section>
+{% endif %}
+<section class="card">
+  {% if has_script %}
+  <p class="hints">📝 <a href="/jobs/{{ job.id }}/review">Skript prüfen (optional)</a>
+    {%- if review_hints %} · {{ review_hints }} Hinweis{{ "e" if review_hints != 1 }}{% endif %}</p>
+  {% endif %}
   <details class="stage-help">
     <summary>Was bedeuten die Schritte?</summary>
     <table class="stage-help">
@@ -17,8 +42,6 @@
   {% include "partials/logtail.html" %}
   {% set running = job.status not in ("done", "failed", "cancelled") %}
   <div class="actions card-actions">
-    {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen (optional)
-      {%- if review_hints %} · {{ review_hints }} Hinweis{{ "e" if review_hints != 1 }}{% endif %}</a>{% endif %}
     <a href="/">⏪ Zurück</a>
     {% if not running %}
     <span class="far-right">

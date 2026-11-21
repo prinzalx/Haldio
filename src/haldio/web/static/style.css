@@ -17,7 +17,13 @@
   --warn-text: #e3b34c;
   --note-bg: #5b4a8a;
   --radius: 8px;
-  --space: 12px;
+  /* correction 6 section 6: one spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
@@ -75,15 +81,17 @@ a:hover { text-decoration: underline; }
 .topbar a { color: var(--text); text-decoration: none; margin-right: 6px; }
 .ver { color: var(--muted); font-size: 0.75rem; }
 #theme-switch { margin-left: auto; }
-main { max-width: 860px; margin: var(--space) auto; padding: 0 10px; }
+main { max-width: 860px; margin: var(--sp-3) auto; padding: 0 var(--sp-2); }
 .card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 14px; margin-bottom: var(--space);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-h1 { font-size: 1.1rem; margin: 4px 0 8px; }
-h2 { font-size: 0.95rem; margin: 4px 0 8px; }
-h3 { font-size: 0.8rem; margin: 2px 0; color: var(--muted); }
+/* correction 6 section 6: title 22 px, section titles 16 px, meta text 14 px */
+h1 { font-size: 22px; font-weight: 700; margin: var(--sp-1) 0 var(--sp-2); }
+h2 { font-size: 16px; margin: var(--sp-1) 0 var(--sp-2); }
+h3 { font-size: 14px; margin: 2px 0; color: var(--muted); }
+.small, .meta { font-size: 14px; }
 table.jobs, table.config { width: 100%; border-collapse: collapse; }
 table.jobs th, table.jobs td, table.config th, table.config td {
   padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border);
@@ -153,7 +161,6 @@ code { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 }
 @keyframes hal-spin { to { transform: rotate(360deg); } }
 .pause { color: var(--muted); }
-.small { font-size: 0.75rem; }
 
 /* --- correction 4: upload card --- */
 .upload { display: block; }
@@ -186,7 +193,7 @@ ul.joblist { list-style: none; margin: 0; padding: 0; }
 progress.thin { width: 70px; height: 4px; }
 .far-right { margin-left: auto; }
 .card-actions {
-  border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border); margin-top: var(--sp-3); padding-top: var(--sp-2);
 }
 button.danger { background: #b3261e; color: #fff; }
 .banner { border-color: var(--warn-bg); }
@@ -194,7 +201,7 @@ button.danger { background: #b3261e; color: #fff; }
 /* --- correction 4: stepper --- */
 ol.stepper {
   display: flex; flex-wrap: wrap; gap: 4px; list-style: none;
-  margin: 0 0 10px; padding: 0; font-size: 0.75rem;
+  margin: 0 0 var(--sp-2); padding: 0; font-size: 0.75rem;
 }
 .step {
   display: flex; gap: 4px; align-items: center; padding: 2px 8px;
@@ -236,7 +243,6 @@ button.busy::after {
 button:disabled { opacity: 0.7; cursor: default; }
 
 /* --- correction 4: summary and result cards --- */
-.summary { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 6px; }
 .result audio { width: 100%; margin: 6px 0; }
 .downloads a { margin-right: 8px; }
 .warn-text { color: var(--warn-text); }
@@ -269,6 +275,7 @@ ul.warnings { margin: 4px 0; padding-left: 18px; color: var(--warn-text); font-s
 
 /* --- correction 4 section 4: responsive from 360px, tables become cards --- */
 @media (max-width: 640px) {
+  ol.stepper { flex-direction: column; align-items: stretch; }
   .chunk-cols { grid-template-columns: 1fr; }
   .jobrow { flex-direction: column; align-items: start; }
   .jobside { width: 100%; }

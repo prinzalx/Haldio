@@ -696,6 +696,48 @@ def test_calm_look_polish_in_stylesheet() -> None:
     assert "text-decoration: none" in css  # calm links, underline on hover only
 
 
+def test_section6_spacing_and_type_scale() -> None:
+    css = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "haldio" / "web" / "static" / "style.css"
+    ).read_text(encoding="utf-8")
+    for step, px in zip(
+        range(1, 7), ("4px", "8px", "12px", "16px", "24px", "32px"), strict=True
+    ):
+        assert f"--sp-{step}: {px};" in css  # one spacing scale for all gaps
+    assert "h1 { font-size: 22px;" in css  # page title
+    assert "h2 { font-size: 16px;" in css  # section titles
+    assert ".small, .meta { font-size: 14px; }" in css  # meta text
+    assert "margin: var(--sp-3) auto" in css  # layout uses the scale, not ad-hoc px
+    media = css.split("@media (max-width: 640px)", 1)[1]
+    assert "ol.stepper { flex-direction: column;" in media  # stepper stacks on phones
+
+
+def test_section6_job_page_order(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    job_dir = index.jobs_dir / job_id
+    (job_dir / "02_plan").mkdir(parents=True, exist_ok=True)
+    (job_dir / "02_plan" / "doc_map.json").write_text(
+        '{"summary": "Test.", "main_topics": ["A"]}', encoding="utf-8"
+    )
+    (job_dir / "04_script").mkdir(parents=True, exist_ok=True)
+    (job_dir / "04_script" / "script.json").write_text('{"chunks": []}', encoding="utf-8")
+    page = client.get(location).text
+    positions = [
+        page.index('<h1>'),
+        page.index('id="job-status"'),
+        page.index("summary-card"),
+        page.index("Skript prüfen (optional)"),
+        page.index("Technische Details"),
+        page.index("card-actions"),
+    ]
+    assert positions == sorted(positions)  # header, status, summary, hints, log, actions
+
+
+
 def test_delete_button_hidden_while_running(app_parts) -> None:
     app, index, _calls = app_parts
     client = TestClient(app)
