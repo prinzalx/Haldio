@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from haldio.extract import PyMuPDFExtractor
+from haldio.extract.extractor import _find_title
+from haldio.extract.model import Block
 from haldio.inspect_report import format_inspect
 from synthetic import HEADER, make_test_pdf
 
@@ -13,6 +15,13 @@ from synthetic import HEADER, make_test_pdf
 def document(tmp_path_factory: pytest.TempPathFactory):
     path = make_test_pdf(tmp_path_factory.mktemp("pdf") / "doc.pdf")
     return PyMuPDFExtractor().extract(path)
+
+
+def test_junk_metadata_title_falls_back_to_first_heading() -> None:
+    heading = Block(id="b1", type="heading", text="Kapitel Eins", level=1)
+    for junk in ("(anonymous)", "Anonymous", "Untitled", "Unbenannt", "none"):
+        title, _author = _find_title([heading], {"title": junk})
+        assert title == "Kapitel Eins"
 
 
 def test_headings_get_levels(document) -> None:

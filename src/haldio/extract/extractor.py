@@ -89,16 +89,16 @@ def _renumber(blocks: list[Block]) -> None:
         block.id = f"b{index:04d}"
 
 
-_JUNK_META = {"", "untitled", "unbenannt", "anonymous", "none"}
+_JUNK_META = {"", "untitled", "unbenannt", "anonymous", "(anonymous)", "none"}
 
 
 def _find_title(blocks: list[Block], meta: dict[str, object]) -> tuple[str, str]:
     """Prefer real embedded metadata, fall back to the first level-1 heading."""
     title = str(meta.get("title") or "").strip()
     author = str(meta.get("author") or "").strip()
-    if title.lower() in _JUNK_META:
+    if title.lower().strip("() ") in _JUNK_META:
         title = ""
-    if author.lower() in _JUNK_META:
+    if author.lower().strip("() ") in _JUNK_META:
         author = ""
     if not title:
         for block in blocks:

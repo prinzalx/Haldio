@@ -21,7 +21,7 @@ STATUS_LABELS: dict[str, dict[str, str]] = {
     "awaiting_review": {"label": "Skript prüfen", "icon": "📝", "cls": "note"},
     "awaiting_tts": {"label": "Bereit für Sprachausgabe", "icon": "🔊", "cls": "note"},
     "waiting_for_user": {"label": "Wartet auf Sie", "icon": "🖐", "cls": "note"},
-    "speaking": {"label": "Vorlesen", "icon": "🔊", "cls": "run"},
+    "speaking": {"label": "Umwandeln in Sprache", "icon": "🔊", "cls": "run"},
     "mastering": {"label": "Audio fertigstellen", "icon": "🎛", "cls": "run"},
     "done": {"label": "Fertig", "icon": "✅", "cls": "ok"},
     "failed": {"label": "Fehlgeschlagen", "icon": "❌", "cls": "bad"},
@@ -35,7 +35,7 @@ STAGES: list[tuple[str, str]] = [
     ("editing", "Hörtext schreiben"),
     ("verifying", "Kontrollieren"),
     ("script", "Skript erstellen"),
-    ("speaking", "Vorlesen"),
+    ("speaking", "Umwandeln in Sprache"),
     ("mastering", "Audio fertigstellen"),
 ]
 

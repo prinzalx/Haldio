@@ -353,6 +353,10 @@ class Worker:
 
         # the override file applies to the job that starts now (correction 5 §8)
         cfg = effective_config(self.config)
+        # the voice picked on the upload page wins over the configured speaker
+        job_voice = str(job.options.get("voice") or "").strip()
+        if job_voice:
+            cfg.tts.speaker = job_voice
         # the mock backend owns no GPU model, so no manual swap gate there
         wait_gate = gate if cfg.tts.backend != "mock" else None
 

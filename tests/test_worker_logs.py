@@ -47,7 +47,7 @@ def test_event_log_has_timestamp_level_and_label(tmp_path) -> None:
     stored = index.get(job.id)
     assert stored is not None and stored.status == "done"
     assert any("[INFO] Hörtext schreiben: Abschnitt 1/2 Kapitel 1" in line for line in stored.logs)
-    assert any("[INFO] Vorlesen: Einheit 12/40" in line for line in stored.logs)
+    assert any("[INFO] Umwandeln in Sprache: Einheit 12/40" in line for line in stored.logs)
     disk = (index.jobs_dir / job.id / "logs" / "job.log").read_text(encoding="utf-8")
     assert "Hörtext schreiben: Abschnitt 1/2" in disk
 

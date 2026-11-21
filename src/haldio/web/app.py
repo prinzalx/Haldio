@@ -581,6 +581,8 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
         "tts.confirm_before_start": "on" if cfg.tts.confirm_before_start else "",
         "editor.fallback_to_source": "on" if cfg.editor.fallback_to_source else "",
         "editor.max_retries": str(cfg.editor.max_retries),
+        "server.host": cfg.server.host,
+        "server.port": str(cfg.server.port),
     }
 
 

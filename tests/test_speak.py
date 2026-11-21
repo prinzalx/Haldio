@@ -116,6 +116,31 @@ def test_master_merges_units(tmp_path) -> None:
     assert (tmp_path / "06_master" / "book.mp3").stat().st_size > 0
 
 
+def test_mastering_progress_caps_at_99(tmp_path, monkeypatch) -> None:
+    """The pipeline never reports 100 itself: only the worker done state sets it."""
+    from haldio.config import Config
+    from haldio.pipeline import run as run_module
+    from haldio.pipeline.master import MasterResult
+
+    (tmp_path / "04_script").mkdir(parents=True)
+    (tmp_path / "04_script" / "script.json").write_text(
+        json.dumps(_script_data()), encoding="utf-8"
+    )
+
+    def fake_make_master(out_dir, formats, pauses, bitrate, progress=None):
+        for i in (1, 2):
+            if progress:
+                progress(i, 2, "mp3")
+        return MasterResult(files=[])
+
+    seen: list[int] = []
+    monkeypatch.setattr(run_module, "make_master", fake_make_master)
+    run_module.run_speech(
+        tmp_path, Config(), "de", progress=lambda stage, value, note="": seen.append(value)
+    )
+    assert max(seen) == 99
+
+
 def test_synthesize_script_fallback_reads_original(tmp_path) -> None:
     """An empty script section falls back to the ORIGINAL text from the chunk input."""
     from haldio.config import TtsConfig

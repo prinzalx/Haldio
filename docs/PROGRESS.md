@@ -473,3 +473,36 @@ Stop - waiting for the owner's OK on the screenshots.
 - Screenshots regenerated after the settings changes (names-only rows, test-text
   field). Reviewer: implementation-reviewer accepted the package; both justified
   changes (drop dead voice description fields, copy options per job) applied.
+
+## Owner package 2026-11-21b - server config, probe backend, job fixes, UI batch
+
+- Server reachable + configurable: done - `haldio serve` honours `--host/--port`;
+  bind priority is CLI flag > settings page > config.yaml > code default; the
+  settings page has editable server host/port fields validated in `parse_form`
+  (no spaces / 1-65535, empty keeps the configured value). Proof:
+  `test_settings_server_host_port_save_and_validate`.
+- Hörprobe produced a 1 s sine: fixed - the running server had no config.yaml,
+  so the code default backend `mock` answered every probe; created config.yaml
+  (git-ignored) with `backend: qwencpp`. Config file, no test.
+- Silent job failure (14/14 units failed): fixed - the voice picked on the
+  upload page never reached the TTS (speaker stayed empty, every unit got
+  HTTP 400); the worker now applies `job.options["voice"]` over the
+  configured speaker before running the pipeline. Proof:
+  `test_job_voice_from_upload_page_reaches_tts_config`.
+- "(anonymous)" title: fixed - the junk metadata filter now strips
+  parentheses (`_JUNK_META` + `.lower().strip("() ")`), so "(anonymous)"
+  falls back to the first level-1 heading. Proof:
+  `test_junk_metadata_title_falls_back_to_first_heading`.
+- Stage label: speaking is now "Umwandeln in Sprache" (owner: "vorlesen" and
+  "sprachausgabe" both imply playback, the stage converts text to speech).
+  Proof: label assertions in `test_event_log_has_timestamp_level_and_label`,
+  `test_gate_error_message_uses_stage_label`.
+- UI batch (owner, 6 items): done - the Themen row is gone from the job
+  summary card; mastering progress caps at 99 until the worker writes the
+  done state (the last stage no longer looks complete before "Fertig");
+  the 🗒 icon is gone from the log summary; the Hörprobe result wraps onto
+  its own line below the button and the audio player below that
+  (`#probe-result` CSS). Proof: updated `test_job_page_summary_card_from_doc_map`,
+  `test_summary_card_shows_placeholders_while_building`, live check in the
+  browser page.
+- Version bumped to 0.1.0rc2 for tag v0.1.0-rc2; 180 tests pass, ruff clean.

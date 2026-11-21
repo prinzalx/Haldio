@@ -290,3 +290,5 @@ ul.warnings { margin: 4px 0; padding-left: 18px; color: var(--warn-text); font-s
   table.config th, table.config td { border: 0; display: block; }
   table.config th { padding-top: 6px; }
 }
+#probe-result { display: block; margin-top: 10px; }
+#probe-result audio { display: block; margin-top: 8px; }
