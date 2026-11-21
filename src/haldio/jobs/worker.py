@@ -17,6 +17,7 @@ from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
 from haldio.llm.client import loaded_llm_models
 from haldio.pipeline.run import BookResult, run_book, run_speech
+from haldio.settings_store import effective_config
 from haldio.tts.base import ModelGuardError
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
@@ -346,26 +347,28 @@ class Worker:
             job.message = "weiter"
             self.index.update(job)
 
+        # the override file applies to the job that starts now (correction 5 §8)
+        cfg = effective_config(self.config)
         # the mock backend owns no GPU model, so no manual swap gate there
-        wait_gate = gate if self.config.tts.backend != "mock" else None
+        wait_gate = gate if cfg.tts.backend != "mock" else None
 
         try:
             folder = self.index.jobs_dir / job_id
             if job.options.get("resume_from") == "speaking":
                 language = job.language if job.language in ("de", "en") else "de"
                 result = run_speech(
-                    folder, self.config, language, progress=progress, gate=wait_gate
+                    folder, cfg, language, progress=progress, gate=wait_gate
                 )
             else:
                 result = self._run_fn(
                     folder / "source.pdf",
-                    self.config,
+                    cfg,
                     folder,
                     progress=progress,
                     stop_after_script=bool(
-                        job.options.get("review", self.config.editor.review_before_tts)
+                        job.options.get("review", cfg.editor.review_before_tts)
                     ),
-                    stop_before_tts=self.config.tts.confirm_before_start,
+                    stop_before_tts=cfg.tts.confirm_before_start,
                     gate=wait_gate,
                     language=str(job.options.get("language", "auto")),
                 )

@@ -3,28 +3,65 @@
 {% block content %}
 <section class="card">
   <h1>⚙️ Einstellungen</h1>
-  <table class="config">
-    <tr><th>LLM (Editor)</th><td>{{ config.llm.base_url }} · Modell {{ config.llm.model }}</td>
-        <td>
-          <button hx-get="/settings/test-llm" hx-target="#llm-test" hx-indicator="#llm-spin">Test LM Studio</button>
-          <span id="llm-spin" class="htmx-indicator">⏳</span>
-          <span id="llm-test" class="test-result"></span>
-        </td></tr>
-    <tr><th>TTS (Sprecher)</th>
-        <td>{% if config.tts.backend == "qwencpp" %}{{ config.tts.qwencpp_model }} · Port {{ config.tts.qwencpp_port }}{% else %}{{ config.tts.model_id }}{% endif %}
-            · Backend {{ config.tts.backend }} · Modus {{ config.tts.mode }} · Stimme {{ config.tts.speaker or "(Standard)" }}</td>
-        <td>
-          <button hx-post="/settings/test-tts" hx-target="#tts-test" hx-indicator="#tts-spin">Test TTS</button>
-          <span id="tts-spin" class="htmx-indicator">⏳</span>
-          <span id="tts-test" class="test-result"></span>
-          <p class="muted">Startet den TTS-Server — vorher das LLM entladen.</p>
-        </td></tr>
-    <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>
-    <tr><th>Server</th><td>{{ config.server.host }}:{{ config.server.port }}</td><td></td></tr>
-    <tr><th>Daten</th><td>{{ config.paths.data_dir }}</td><td></td></tr>
-    <tr><th>Hörtext-Prompt</th><td>{{ config.editor.prompt_version }}</td><td></td></tr>
-  </table>
-  <p class="muted">Die Einstellungen kommen aus <code>config.yaml</code> (siehe <code>config.example.yaml</code>).</p>
-  <p class="muted small">Version {{ version }}</p>
+  <p class="muted small">Änderungen gelten für Jobs, die nach dem Speichern starten.
+    Ein laufender Job behält seine Einstellungen.</p>
+  <form method="post" action="/settings">
+    <label for="f-url">Adresse (LM Studio)</label>
+    <input id="f-url" name="llm.base_url" value="{{ form['llm.base_url'] }}" size="34">
+    {% if errors.get('llm.base_url') %}<p class="error">{{ errors['llm.base_url'] }}</p>{% endif %}
+
+    <label for="f-model">Modell</label>
+    <input id="f-model" name="llm.model" value="{{ form['llm.model'] }}" size="24">
+    {% if errors.get('llm.model') %}<p class="error">{{ errors['llm.model'] }}</p>{% endif %}
+    <p>
+      <button type="button" hx-get="/settings/test-llm" hx-target="#llm-test"
+              hx-indicator="#llm-spin">Test LM Studio</button>
+      <span id="llm-spin" class="htmx-indicator">⏳</span>
+      <span id="llm-test" class="test-result"></span>
+    </p>
+
+    <label for="f-speaker">Sprecher</label>
+    <input id="f-speaker" name="tts.speaker" value="{{ form['tts.speaker'] }}" size="16">
+    <label for="f-lang">Sprache</label>
+    <select id="f-lang" name="tts.language">
+      <option value="auto" {% if form['tts.language'] == 'auto' %}selected{% endif %}>Automatisch</option>
+      <option value="de" {% if form['tts.language'] == 'de' %}selected{% endif %}>Deutsch</option>
+      <option value="en" {% if form['tts.language'] == 'en' %}selected{% endif %}>Englisch</option>
+    </select>
+
+    <p>
+      <label><input type="checkbox" name="audio.format.mp3"
+        {% if form['audio.format.mp3'] %}checked{% endif %}> MP3</label>
+      <label><input type="checkbox" name="audio.format.ogg"
+        {% if form['audio.format.ogg'] %}checked{% endif %}> OGG</label>
+      {% if errors.get('audio.format.mp3') %}<span class="error">{{ errors['audio.format.mp3'] }}</span>{% endif %}
+    </p>
+    <label for="f-bitrate">Bitrate (kbit/s)</label>
+    <input id="f-bitrate" name="audio.mp3_bitrate_kbps" value="{{ form['audio.mp3_bitrate_kbps'] }}" size="5">
+    {% if errors.get('audio.mp3_bitrate_kbps') %}<p class="error">{{ errors['audio.mp3_bitrate_kbps'] }}</p>{% endif %}
+
+    <p><label><input type="checkbox" name="editor.review_before_tts"
+      {% if form['editor.review_before_tts'] %}checked{% endif %}> Skript vor der Sprachausgabe prüfen</label></p>
+    <p><label><input type="checkbox" name="tts.confirm_before_start"
+      {% if form['tts.confirm_before_start'] %}checked{% endif %}> Vor dem Vorlesen auf mich warten</label></p>
+    <p><label><input type="checkbox" name="editor.fallback_to_source"
+      {% if form['editor.fallback_to_source'] %}checked{% endif %}> Bei fehlendem Hörtext den Originaltext vorlesen</label></p>
+    <label for="f-retries">Wiederholungen der Kontrolle</label>
+    <input id="f-retries" name="editor.max_retries" value="{{ form['editor.max_retries'] }}" size="3">
+    {% if errors.get('editor.max_retries') %}<p class="error">{{ errors['editor.max_retries'] }}</p>{% endif %}
+
+    <div class="actions card-actions">
+      <button type="submit">💾 Speichern</button>
+      <button class="secondary" type="submit" formaction="/settings/reset">↩ Auf Standard zurücksetzen</button>
+    </div>
+  </form>
+  <p>
+    <button type="button" hx-post="/settings/test-tts" hx-target="#tts-test"
+            hx-indicator="#tts-spin">Test TTS</button>
+    <span id="tts-spin" class="htmx-indicator">⏳</span>
+    <span id="tts-test" class="test-result"></span>
+    <span class="muted small">Startet den TTS-Server — vorher das LLM entladen.</span>
+  </p>
+  <p class="muted small">Server: {{ config.server.host }}:{{ config.server.port }} · Version {{ version }}</p>
 </section>
 {% endblock %}

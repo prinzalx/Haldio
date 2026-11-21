@@ -14,6 +14,7 @@ from haldio.jobs.worker import Worker
 from haldio.pipeline.master import MasterResult
 from haldio.pipeline.run import BookResult, ScriptResult
 from haldio.pipeline.speak import SpeakResult
+from haldio.settings_store import save_override
 from haldio.web.app import create_app
 
 
@@ -698,12 +699,80 @@ def test_version_shows_in_footer_and_settings(app_parts) -> None:
     assert f"Version {__version__}" in settings  # from package metadata
 
 
-def test_settings_page_lists_effective_paths(app_parts) -> None:
-    app, index, _calls = app_parts
+_SETTINGS_FORM = {
+    "llm.base_url": "http://127.0.0.1:8080/v1",
+    "llm.model": "qwen3-test",
+    "tts.speaker": "",
+    "tts.language": "de",
+    "audio.format.mp3": "on",
+    "audio.mp3_bitrate_kbps": "128",
+    "editor.review_before_tts": "on",
+    "tts.confirm_before_start": "on",
+    "editor.fallback_to_source": "on",
+    "editor.max_retries": "2",
+}
+
+
+def test_settings_save_writes_override_file(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post("/settings", data=_SETTINGS_FORM, follow_redirects=False)
+    assert response.status_code == 303
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "qwen3-test" in text
+    assert "speaker" not in text  # the empty field keeps the default speaker
+    page = client.get("/settings").text
+    assert "qwen3-test" in page  # the effective value is shown after the save
+    assert app.state.config.llm.model == "bubo"  # the base config keeps its value
+
+
+def test_settings_save_rejects_bad_bitrate(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    bad = dict(_SETTINGS_FORM, **{"audio.mp3_bitrate_kbps": "999"})
+    page = client.post("/settings", data=bad)
+    assert page.status_code == 422
+    assert "Bitrate: ganze Zahl von 32 bis 320." in page.text
+    assert not (app.state.config.paths.data_dir / "settings.local.yaml").is_file()
+
+
+def test_settings_reset_removes_override(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    client.post("/settings", data=_SETTINGS_FORM, follow_redirects=False)
+    response = client.post("/settings/reset", follow_redirects=False)
+    assert response.status_code == 303
+    assert not (app.state.config.paths.data_dir / "settings.local.yaml").is_file()
+    assert "bubo" in client.get("/settings").text  # defaults are back
+
+
+def test_job_start_uses_override(tmp_path) -> None:
+    config = Config()
+    config.paths.data_dir = tmp_path
+    index = JobIndex(tmp_path / "data")
+    seen: dict[str, str] = {}
+
+    def run_fn(pdf_path, cfg, out_dir, **kwargs):
+        seen["model"] = cfg.llm.model
+        return _fake_result(out_dir)
+
+    save_override(tmp_path, {"llm": {"model": "überschrieben"}})
+    worker = Worker(index, config, run_fn=run_fn, inline=True)
+    app = create_app(config, index=index, worker=worker)
+    client = TestClient(app)
+    _upload_pdf(client)
+    assert seen["model"] == "überschrieben"
+
+
+def test_settings_page_shows_form_and_server(app_parts) -> None:
+    app, _index, _calls = app_parts
     client = TestClient(app)
     page = client.get("/settings")
-    assert "Daten" in page.text and str(index.data_dir.parent) in page.text
-    assert "Hörtext-Prompt" in page.text and "v1" in page.text
+    assert 'name="llm.model"' in page.text  # fields are editable now
+    assert "8505" in page.text  # read-only server line
+    assert "Auf Standard zurücksetzen" in page.text
 
 
 def test_calm_look_polish_in_stylesheet() -> None:

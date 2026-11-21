@@ -24,6 +24,13 @@ from haldio.llm.client import llm_reachable
 from haldio.pipeline.assemble import render_script_md
 from haldio.pipeline.edit import load_prompt_version, system_with_examples
 from haldio.pipeline.run import edit_chunk_with_retry
+from haldio.settings_store import (
+    clear_override,
+    effective_config,
+    load_override,
+    parse_form,
+    save_override,
+)
 from haldio.tts.base import ModelGuardError
 from haldio.web.labels import stage_help, status_label, stepper_state, warning_text
 
@@ -319,16 +326,42 @@ def create_app(
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
+        eff = effective_config(config)
         return templates.TemplateResponse(
-            request, "settings.html", {"config": config, "llm_result": "", "tts_result": ""}
+            request,
+            "settings.html",
+            {"config": eff, "form": _form_from_config(eff), "errors": {}},
         )
+
+    @app.post("/settings")
+    async def save_settings(request: Request) -> Response:
+        data = dict(await request.form())
+        values, errors = parse_form(data)
+        if errors:
+            eff = effective_config(config)
+            return templates.TemplateResponse(
+                request,
+                "settings.html",
+                {"config": eff, "form": data, "errors": errors},
+                status_code=422,
+            )
+        merged = load_override(config.paths.data_dir)
+        for section, updates in values.items():
+            merged.setdefault(section, {}).update(updates)  # type: ignore[union-attr]
+        save_override(config.paths.data_dir, merged)
+        return RedirectResponse("/settings?saved=1", status_code=303)
+
+    @app.post("/settings/reset")
+    def reset_settings() -> RedirectResponse:
+        clear_override(config.paths.data_dir)
+        return RedirectResponse("/settings?reset=1", status_code=303)
 
     @app.get("/settings/test-llm", response_class=HTMLResponse)
     def test_llm() -> HTMLResponse:
         from haldio.llm.client import LlmClient, LlmError
 
         try:
-            client = LlmClient(config.llm)
+            client = LlmClient(effective_config(config).llm)
             models = ", ".join(client.list_models()[:10])
             client.close()
             text = f"LM Studio ok: {models or 'keine Modelle'}"
@@ -343,7 +376,7 @@ def create_app(
         from haldio.tts import create_backend
         from haldio.tts.qwen_local import QwenLocalBackend
 
-        backend = create_backend(config.tts)
+        backend = create_backend(effective_config(config).tts)
         try:
             if isinstance(backend, QwenLocalBackend):
                 try:
@@ -402,6 +435,23 @@ _FILE_SLOTS = (
     ("qa_report.html", "QA-Bericht"),
     ("source.pdf", "PDF"),
 )
+
+
+def _form_from_config(cfg: Config) -> dict[str, str]:
+    """Effective values as form strings, so one template shape serves GET and POST."""
+    return {
+        "llm.base_url": cfg.llm.base_url,
+        "llm.model": cfg.llm.model,
+        "tts.speaker": cfg.tts.speaker,
+        "tts.language": cfg.tts.language,
+        "audio.format.mp3": "on" if "mp3" in cfg.audio.formats else "",
+        "audio.format.ogg": "on" if "ogg" in cfg.audio.formats else "",
+        "audio.mp3_bitrate_kbps": str(cfg.audio.mp3_bitrate_kbps),
+        "editor.review_before_tts": "on" if cfg.editor.review_before_tts else "",
+        "tts.confirm_before_start": "on" if cfg.tts.confirm_before_start else "",
+        "editor.fallback_to_source": "on" if cfg.editor.fallback_to_source else "",
+        "editor.max_retries": str(cfg.editor.max_retries),
+    }
 
 
 def _result_span(text: str) -> str:

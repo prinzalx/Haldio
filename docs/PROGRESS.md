@@ -351,4 +351,12 @@ became a time-shifted process.
 - Reviewer: sections 5, 6-8 were each reviewed by the implementation-reviewer subagent;
   all justified change points were applied before the commits.
 
+## Correction 6 - section 8 Settings page (sub-steps a-e, one commit each)
+
+- 8a override file: done - `data/settings.local.yaml` is written by POST /settings (validated field by field, German errors at the field, 422 on bad input), merged over `config.yaml` at job start in `worker._process` via `effective_config`; "Auf Standard zurücksetzen" clears it; `config.yaml` is never rewritten. Proof: `test_settings_save_writes_override_file`, `test_settings_save_rejects_bad_bitrate`, `test_settings_reset_removes_override`, `test_job_start_uses_override`.
+- 8b LLM card: open
+- 8c TTS card: open
+- 8d cards Ausgabe/Ablauf/Erweitert: open
+- 8e no paths in the UI + docs/configuration.md: open
+
 Stop - waiting for the owner's OK on the screenshots.

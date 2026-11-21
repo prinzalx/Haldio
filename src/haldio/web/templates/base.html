@@ -38,6 +38,10 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toastBox.classList.remove("show"), 2000);
   }
+  // a plain form POST answers with a redirect; the query says what happened
+  const flash = new URLSearchParams(location.search);
+  if (flash.get("saved")) showToast("Gespeichert");
+  if (flash.get("reset")) showToast("Auf Standard zurückgesetzt");
   const themeSwitch = document.getElementById("theme-switch");
   const themeIsDark = () => (document.documentElement.dataset.theme
     || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
