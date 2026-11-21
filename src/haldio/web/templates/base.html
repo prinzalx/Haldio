@@ -19,9 +19,11 @@
 </head>
 <body>
   <header class="topbar">
+    {% set nav = request.url.path %}
     <a class="brand" href="/">🎧 Haldio</a>
-    <a href="/">📚 Bücherei</a>
-    <a href="/settings">⚙️ Einstellungen</a>
+    <a href="/" {% if nav == "/" %}class="is-active" aria-current="page"{% endif %}>📚 Bücherei</a>
+    <a href="/settings" {% if nav.startswith("/settings") %}class="is-active"
+       aria-current="page"{% endif %}>⚙️ Einstellungen</a>
     <button id="theme-switch" class="secondary" aria-label="Farbthema wechseln">🌙</button>
     <span class="ver">v{{ version | default('dev') }}</span>
   </header>

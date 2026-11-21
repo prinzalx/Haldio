@@ -21,6 +21,8 @@
         </td></tr>
     <tr><th>Ausgabe</th><td>{{ config.audio.formats | join(", ") }} · {{ config.audio.mp3_bitrate_kbps }} kbit/s</td><td></td></tr>
     <tr><th>Server</th><td>{{ config.server.host }}:{{ config.server.port }}</td><td></td></tr>
+    <tr><th>Daten</th><td>{{ config.paths.data_dir }}</td><td></td></tr>
+    <tr><th>Hörtext-Prompt</th><td>{{ config.editor.prompt_version }}</td><td></td></tr>
   </table>
   <p class="muted">Die Einstellungen kommen aus <code>config.yaml</code> (siehe <code>config.example.yaml</code>).</p>
 </section>

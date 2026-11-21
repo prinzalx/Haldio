@@ -668,6 +668,34 @@ def test_job_page_summary_card_from_doc_map(app_parts) -> None:
     assert "Technik" in page.text
 
 
+def test_topbar_marks_the_active_page(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    assert 'aria-current="page"' in client.get("/").text  # Bücherei active
+    assert 'aria-current="page"' in client.get("/settings").text
+    location = _upload_pdf(client)
+    assert "aria-current" not in client.get(location).text  # job page: neither
+
+
+def test_settings_page_lists_effective_paths(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings")
+    assert "Daten" in page.text and str(index.data_dir.parent) in page.text
+    assert "Hörtext-Prompt" in page.text and "v1" in page.text
+
+
+def test_calm_look_polish_in_stylesheet() -> None:
+    css = (
+        Path(__file__).resolve().parents[1]
+        / "src" / "haldio" / "web" / "static" / "style.css"
+    ).read_text(encoding="utf-8")
+    assert "box-shadow" in css  # cards lifted from the page
+    assert "accent-color" in css  # one honest progress colour
+    assert "button:not(:disabled):hover" in css  # only live buttons answer the pointer
+    assert "text-decoration: none" in css  # calm links, underline on hover only
+
+
 def test_delete_button_hidden_while_running(app_parts) -> None:
     app, index, _calls = app_parts
     client = TestClient(app)

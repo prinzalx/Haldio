@@ -62,12 +62,15 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-a { color: var(--accent); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .topbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 6px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 20;
 }
+.topbar a.is-active { color: var(--accent); font-weight: 600; }
 .brand { color: var(--text); font-weight: 600; text-decoration: none; }
 .topbar a { color: var(--text); text-decoration: none; margin-right: 6px; }
 .ver { color: var(--muted); font-size: 0.75rem; }
@@ -76,6 +79,7 @@ main { max-width: 860px; margin: var(--space) auto; padding: 0 10px; }
 .card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 10px 14px; margin-bottom: var(--space);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 h1 { font-size: 1.1rem; margin: 4px 0 8px; }
 h2 { font-size: 0.95rem; margin: 4px 0 8px; }
@@ -107,14 +111,19 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 button {
   background: var(--btn); color: #fff; border: 0; border-radius: 6px;
   padding: 4px 10px; cursor: pointer; font: inherit;
+  transition: filter 0.15s, background-color 0.15s;
 }
+button:not(:disabled):hover { filter: brightness(1.15); }
 button.secondary { background: var(--panel-2); color: var(--text); }
 form { display: inline; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }
 .error { color: var(--bad-text); }
 .empty { color: var(--muted); font-style: italic; }
-progress { width: 120px; height: 10px; vertical-align: middle; }
+progress {
+  width: 120px; height: 10px; vertical-align: middle;
+  accent-color: var(--accent); border-radius: 4px;
+}
 textarea {
   width: 100%; background: var(--bg); color: var(--text);
   border: 1px solid var(--border); border-radius: 6px; padding: 6px;
@@ -126,7 +135,8 @@ code { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 .logtail { margin: 8px 0; }
 .logtail summary { color: var(--muted); cursor: pointer; font-size: 0.75rem; }
 .logbox { max-height: 240px; overflow-y: auto; border: 1px solid var(--border);
-  border-radius: 6px; background: var(--bg); }
+  border-radius: 6px; background: var(--bg); scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent; }
 .logtail pre {
   margin: 0; padding: 6px 8px;
   font-family: Consolas, monospace; font-size: 0.75rem; line-height: 1.45;
@@ -161,7 +171,6 @@ select {
   background: var(--bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 4px 6px; font: inherit;
 }
-button:disabled { opacity: 0.5; cursor: wait; }
 
 /* --- correction 4: job list rows --- */
 ul.joblist { list-style: none; margin: 0; padding: 0; }
@@ -170,6 +179,7 @@ ul.joblist { list-style: none; margin: 0; padding: 0; }
   border-bottom: 1px solid var(--border); padding: 8px 0;
 }
 .jobmain { flex: 1 1 240px; min-width: 0; }
+.jobrow:hover { background: color-mix(in srgb, var(--panel-2) 55%, transparent); }
 .jobtitle { font-weight: 600; }
 .jobside { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .jobside > * + * { border-left: 1px solid var(--border); padding-left: 12px; }

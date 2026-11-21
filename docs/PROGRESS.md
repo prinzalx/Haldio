@@ -329,3 +329,10 @@ became a time-shifted process.
 - Danger button: fixed - white text on #b3261e (WCAG AA in both themes); the dead old rule was removed after the review.
 - Placeholder: fixed - "Wird erstellt ..." shows in the summary card wherever nothing is computed yet.
 - Tests: 130 pass - early page count, title fallback incl. level-1 filter, quick_summary wording and truncation, delete hidden while running, placeholders, doc_map summary wiring.
+
+## Correction 5 - sections 6-8 Look, top bar, settings
+
+- Section 6, calm polished look: done - cards carry a subtle shadow; links show underline only on hover; live buttons brighten on hover (disabled stay calm); progress bars use one accent colour; job rows have a soft hover line; the log box scrolls with a thin scrollbar. Merged a second dead `button:disabled` rule after the review.
+- Section 7, top bar: done - the bar sticks to the top while scrolling; the current page is marked in the navigation (`aria-current="page"`, accent colour); job pages mark neither link.
+- Section 8, settings page: done - the effective-config table also shows the data directory ("Daten") and the editor prompt version ("Hörtext-Prompt"); no secrets are rendered (the API key stays out of the page).
+- Tests: 133 pass - stylesheet assertions for the polish rules, active-page marking per route, settings rows.
