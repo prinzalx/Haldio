@@ -152,7 +152,12 @@ def run_script(
     out_dir.mkdir(parents=True, exist_ok=True)
     document = PyMuPDFExtractor().extract(pdf_path)
     _write_json(out_dir / "01_extract" / "document.json", document.to_dict())
-    report("extracting", 7, f"{ingested.page_count} Seiten gelesen #summary")
+    report(
+        "extracting",
+        7,
+        f"{ingested.page_count} Seiten gelesen #summary",
+        page_count=ingested.page_count,
+    )
 
     doc_map = build_doc_map(document)
     if not doc_map.get("summary"):

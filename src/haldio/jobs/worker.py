@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import threading
 import time
 import traceback
@@ -41,8 +40,6 @@ _ITEM_WORDS = {
 # note markers that describe a real (measured) item; cache hits and silent
 # failures are excluded from the speed average
 _REAL_MARKERS = ("", "ok", "synth")
-# the extracting summary note ("12 Seiten gelesen") carries the page count
-_PAGES_RE = re.compile(r"(\d+) Seiten")
 _CONSOLE = logging.getLogger("haldio.worker")
 
 
@@ -227,7 +224,9 @@ class Worker:
                 "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
             }
 
-        def progress(stage: str, value: int, note: str = "") -> None:
+        def progress(
+            stage: str, value: int, note: str = "", page_count: int = 0
+        ) -> None:
             if job_id in self._cancelled:
                 raise _Cancelled()
             done, total, marker, extra = _parse_note(note)
@@ -277,11 +276,8 @@ class Worker:
                 self._log(job, f"{_STAGE_LABELS.get(stage, stage)}: {body}", level)
             else:
                 detail = extra or _STAGE_LABELS.get(stage, stage)
-                if stage == "extracting":
-                    # _parse_note moved the leading number out of extra
-                    found = _PAGES_RE.search(note)
-                    if found:
-                        job.page_count = int(found.group(1))
+                if page_count:
+                    job.page_count = page_count
                 emit("running", stage, detail, None, 0, 0)
             job.message = detail
             self.index.update(job)

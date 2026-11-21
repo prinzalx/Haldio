@@ -53,12 +53,13 @@ def test_event_log_has_timestamp_level_and_label(tmp_path) -> None:
 
 
 def test_page_count_saved_during_extract_and_title_fallback(tmp_path) -> None:
-    """page_count lands at Einlesen time; a PDF without title gets the file stem."""
+    """page_count arrives as a structured field at Einlesen time; a PDF
+    without title gets the file stem."""
     index = JobIndex(tmp_path / "data")
 
     def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
         if progress:
-            progress("extracting", 7, "12 Seiten gelesen #summary")
+            progress("extracting", 7, "12 Seiten gelesen #summary", page_count=12)
         return _fake_result(out_dir)
 
     job = index.create("book.pdf")
@@ -66,6 +67,21 @@ def test_page_count_saved_during_extract_and_title_fallback(tmp_path) -> None:
     stored = index.get(job.id)
     assert stored.page_count == 12
     assert stored.title == "book"
+
+
+def test_page_count_comes_from_the_field_not_the_note_text(tmp_path) -> None:
+    """Text made for people never sets the page count; only the field does."""
+    index = JobIndex(tmp_path / "data")
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        if progress:
+            progress("extracting", 7, "Alles gelesen #summary")
+        return _fake_result(out_dir)
+
+    job = index.create("book.pdf")
+    _inline_worker(index, run_fn).enqueue(job.id)
+    stored = index.get(job.id)
+    assert stored is not None and stored.page_count == 0
 
 
 def test_title_falls_back_to_first_heading(tmp_path) -> None:

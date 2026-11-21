@@ -320,7 +320,7 @@ became a time-shifted process.
 
 ## Correction 5 - section 5 Job page layout
 
-- Page count: fixed - `page_count` lands while the stage is still "Einlesen" (the worker parses "N Seiten gelesen" from the progress note at 7 %), no longer only at the end.
+- Page count: fixed - `page_count` lands while the stage is still "Einlesen" (structured field from ingest, see Correction 6 - §2.1 below), no longer only at the end.
 - Title fallback: fixed - a PDF without a metadata title gets the first level-1 chapter title, else the file name without extension (`_fallback_title`).
 - Deterministic summary: fixed - `quick_summary()` in plan.py builds up to 6 "heading: first paragraph" snippets; `run_script` stores it when the plan stage produced no summary (wired and tested).
 - Progress once: fixed - the status block shows ONE bar reading "Gesamt N %"; the old badge in the bar line is gone.
@@ -362,5 +362,9 @@ became a time-shifted process.
 ## Correction 6 - section 1 open item: live token count
 
 - done. Long LLM requests now use `stream=true`; the editing activity shows "das Sprachmodell schreibt seit 38 s (etwa 410 Token)" (updated about once per second; the note has no `done/total`, so it refreshes the activity record without writing log lines). If the server ignores or rejects `stream=true` the client falls back to the plain request (the answer is generated twice on such a server) and the UI keeps the elapsed time only ("zuletzt aktiv vor X s"). Proof: `test_chat_stream_counts_tokens`, `test_chat_stream_falls_back_when_server_ignores_stream`.
+
+## Correction 6 - §2.1: page_count as a structured field
+
+- done. The worker no longer parses human text for the page count. `progress(stage, value, note, page_count=...)` receives the number from the ingest stage (`run_script` passes `page_count=ingested.page_count` at the extracting report); `_PAGES_RE` and its `import re` are removed. Proof: `test_page_count_saved_during_extract_and_title_fallback` (field -> 12) and `test_page_count_comes_from_the_field_not_the_note_text` (note text alone -> 0).
 
 Stop - waiting for the owner's OK on the screenshots.
