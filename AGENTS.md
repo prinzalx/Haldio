@@ -13,7 +13,15 @@ uv run pytest -m live        # tests that need a real LM Studio / TTS server
 uv run ruff check src tests  # lint
 uv run ruff format src tests # format
 uv run uvicorn haldio.web:app --port 8505   # web server (M4)
+uv run python scripts/publish.py   # release user files to the public repo
 ```
+
+## Remotes
+
+- `origin` = private `haldio_dev` — everything, normal `git push` backup.
+- `public` = public `Haldio` — only user files; publish with
+  `scripts/publish.py` (checks, secret scan, file list, asks before push).
+  Never push diary files to `public` by hand.
 
 ## Layout
 
