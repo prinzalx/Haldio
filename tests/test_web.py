@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from haldio import __version__
 from haldio.config import Config
 from haldio.jobs.index import JobIndex
 from haldio.jobs.worker import Worker
@@ -671,10 +672,30 @@ def test_job_page_summary_card_from_doc_map(app_parts) -> None:
 def test_topbar_marks_the_active_page(app_parts) -> None:
     app, _index, _calls = app_parts
     client = TestClient(app)
-    assert 'aria-current="page"' in client.get("/").text  # Bücherei active
+    assert 'aria-current="page"' in client.get("/").text  # logo marks the library
     assert 'aria-current="page"' in client.get("/settings").text
     location = _upload_pdf(client)
     assert "aria-current" not in client.get(location).text  # job page: neither
+
+
+def test_topbar_has_only_the_logo_link(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    topbar = client.get("/").text.split('<header class="topbar">', 1)[1]
+    topbar = topbar.split("</header>", 1)[0]
+    assert "Bücherei" not in topbar  # the logo is the only way home
+    assert topbar.count('href="/"') == 1  # one logo link
+    assert "dev" not in topbar and f"v{__version__}" not in topbar  # no version chip
+    assert "Einstellungen" in topbar
+
+
+def test_version_shows_in_footer_and_settings(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    footer = client.get("/").text.split("</main>", 1)[1]
+    assert f"v{__version__}" in footer  # real version, small footer only
+    settings = client.get("/settings").text.split("</main>", 1)[0]
+    assert f"Version {__version__}" in settings  # from package metadata
 
 
 def test_settings_page_lists_effective_paths(app_parts) -> None:

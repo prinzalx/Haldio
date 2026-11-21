@@ -79,8 +79,8 @@ a:hover { text-decoration: underline; }
 .topbar a.is-active { color: var(--accent); font-weight: 600; }
 .brand { color: var(--text); font-weight: 600; text-decoration: none; }
 .topbar a { color: var(--text); text-decoration: none; margin-right: 6px; }
-.ver { color: var(--muted); font-size: 0.75rem; }
-#theme-switch { margin-left: auto; }
+.footer { color: var(--muted); font-size: 14px; text-align: center; padding: var(--sp-2) 0 var(--sp-4); }
+.topbar .nav-settings { margin-left: auto; }
 main { max-width: 860px; margin: var(--sp-3) auto; padding: 0 var(--sp-2); }
 .card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);

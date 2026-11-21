@@ -20,14 +20,14 @@
 <body>
   <header class="topbar">
     {% set nav = request.url.path %}
-    <a class="brand" href="/">🎧 Haldio</a>
-    <a href="/" {% if nav == "/" %}class="is-active" aria-current="page"{% endif %}>📚 Bücherei</a>
-    <a href="/settings" {% if nav.startswith("/settings") %}class="is-active"
-       aria-current="page"{% endif %}>⚙️ Einstellungen</a>
+    <a class="brand{% if nav == '/' %} is-active{% endif %}" href="/"
+       {% if nav == '/' %}aria-current="page"{% endif %}>🎧 Haldio</a>
+    <a href="/settings" class="nav-settings{% if nav.startswith("/settings") %} is-active{% endif %}"
+       {% if nav.startswith("/settings") %}aria-current="page"{% endif %}>⚙️ Einstellungen</a>
     <button id="theme-switch" class="secondary" aria-label="Farbthema wechseln">🌙</button>
-    <span class="ver">v{{ version | default('dev') }}</span>
   </header>
   <main>{% block content %}{% endblock %}</main>
+  <footer class="footer">v{{ version }}</footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
   const toastBox = document.getElementById("toast");

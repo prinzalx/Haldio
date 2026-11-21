@@ -45,6 +45,7 @@ def create_app(
     templates.env.filters["status_label"] = status_label
     templates.env.filters["warning_text"] = warning_text
     templates.env.filters["date"] = _format_date
+    templates.env.globals["version"] = __version__  # footer + settings only
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
     @app.middleware("http")
@@ -67,7 +68,6 @@ def create_app(
             "library.html",
             {
                 "jobs": jobs,
-                "version": __version__,
                 "voices": _available_voices(config),
                 "selected_voice": config.tts.speaker or "dylan",
             },
