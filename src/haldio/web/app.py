@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -20,7 +26,7 @@ from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
 from haldio.jobs.worker import Worker
 from haldio.llm import LlmClient
-from haldio.llm.client import llm_reachable
+from haldio.llm.client import llm_reachable, loaded_llm_models
 from haldio.pipeline.assemble import render_script_md
 from haldio.pipeline.edit import load_prompt_version, system_with_examples
 from haldio.pipeline.run import edit_chunk_with_retry
@@ -360,16 +366,42 @@ def create_app(
     def test_llm() -> HTMLResponse:
         from haldio.llm.client import LlmClient, LlmError
 
+        llm = effective_config(config).llm
         try:
-            client = LlmClient(effective_config(config).llm)
-            models = ", ".join(client.list_models()[:10])
+            client = LlmClient(llm)
+            models = client.list_models()
             client.close()
-            text = f"LM Studio ok: {models or 'keine Modelle'}"
         except LlmError as error:
-            text = f"Fehler: {error}"
+            return HTMLResponse(_result_span(f"Fehler: {error}"))
         except Exception as error:  # noqa: BLE001 - show any connection error in the UI
-            text = f"Fehler: {error}"
+            return HTMLResponse(_result_span(f"Fehler: {error}"))
+        count = f"{len(models)} Modell{'e' if len(models) != 1 else ''}"
+        if llm.model in models:
+            text = f"LM Studio ok: {count} · gewähltes Modell vorhanden"
+        else:
+            text = f"Achtung: LM Studio ok ({count}) · Modell {llm.model} fehlt"
         return HTMLResponse(_result_span(text))
+
+    @app.get("/settings/models")
+    def models_list() -> JSONResponse:
+        """The LM Studio model list for the dropdown, plus which are loaded."""
+        from haldio.llm.client import LlmClient
+
+        llm = effective_config(config).llm
+        try:
+            client = LlmClient(llm)
+            models = client.list_models()
+            client.close()
+        except Exception as error:  # noqa: BLE001 - shown as a hint
+            return JSONResponse({"ok": False, "error": str(error)})
+        return JSONResponse(
+            {
+                "ok": True,
+                "models": models,
+                "loaded": loaded_llm_models() or [],
+                "current": llm.model,
+            }
+        )
 
     @app.post("/settings/test-tts")
     def test_tts() -> HTMLResponse:
@@ -458,11 +490,11 @@ def _result_span(text: str) -> str:
     """Test-button result with a clear success/error/warn class."""
     cls = (
         "result-error"
-        if text.startswith("Fehler")
+        if text.startswith(("Fehler", "CSRF"))
         else "result-warn"
-        if text.startswith("Gestoppt")
+        if text.startswith(("Gestoppt", "Achtung"))
         else "result-ok"
-    )  # noqa: E501
+    )
     return f'<span class="{cls}">{html.escape(text)}</span>'
 
 

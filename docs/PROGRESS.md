@@ -354,7 +354,7 @@ became a time-shifted process.
 ## Correction 6 - section 8 Settings page (sub-steps a-e, one commit each)
 
 - 8a override file: done - `data/settings.local.yaml` is written by POST /settings (validated field by field, German errors at the field, 422 on bad input), merged over `config.yaml` at job start in `worker._process` via `effective_config`; "Auf Standard zurücksetzen" clears it; `config.yaml` is never rewritten. Proof: `test_settings_save_writes_override_file`, `test_settings_save_rejects_bad_bitrate`, `test_settings_reset_removes_override`, `test_job_start_uses_override`.
-- 8b LLM card: open
+- 8b LLM card: done - card „Sprachmodell (LLM)" with address field, model dropdown filled by GET /settings/models (loaded models marked from lms ps, German fallback to a free text field when LM Studio is unreachable), „Verbindung testen“ reports reachability, model count and whether the chosen model exists (warn when it fehlt). Proof: `test_settings_llm_card_has_dropdown_and_buttons`, `test_settings_model_list_marks_loaded`, `test_settings_model_list_reports_unreachable`, `test_settings_test_llm_reports_count_and_missing`, `test_settings_test_llm_flags_a_missing_model`, `test_settings_test_llm_unreachable_shows_error`.
 - 8c TTS card: open
 - 8d cards Ausgabe/Ablauf/Erweitert: open
 - 8e no paths in the UI + docs/configuration.md: open

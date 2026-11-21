@@ -385,7 +385,7 @@ def test_settings_page_shows_endpoints(app_parts) -> None:
     page = client.get("/settings")
     assert page.status_code == 200
     assert "Einstellungen" in page.text
-    assert "Test LM Studio" in page.text
+    assert "Verbindung testen" in page.text
 
 
 def test_settings_test_tts_mock(app_parts) -> None:
@@ -746,6 +746,82 @@ def test_settings_reset_removes_override(app_parts) -> None:
     assert response.status_code == 303
     assert not (app.state.config.paths.data_dir / "settings.local.yaml").is_file()
     assert "bubo" in client.get("/settings").text  # defaults are back
+
+
+def test_settings_llm_card_has_dropdown_and_buttons(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings").text
+    assert "Sprachmodell (LLM)" in page  # the card exists
+    assert 'select id="f-model"' in page  # model is a dropdown
+    assert "Modelle laden" in page
+    assert "Verbindung testen" in page
+    assert 'id="f-model-free"' in page  # free text stays ready if lms fails
+
+
+def test_settings_model_list_marks_loaded(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    monkeypatch.setattr(
+        "haldio.web.app.loaded_llm_models", lambda *a, **k: ["bubo"], raising=True
+    )
+    monkeypatch.setattr(
+        "haldio.llm.client.LlmClient.list_models",
+        lambda self: ["bubo", "qwen3"],
+        raising=True,
+    )
+    client = TestClient(app)
+    data = client.get("/settings/models").json()
+    assert data["ok"] is True
+    assert data["models"] == ["bubo", "qwen3"]
+    assert data["loaded"] == ["bubo"]
+    assert data["current"] == "bubo"  # the configured model
+
+
+def test_settings_model_list_reports_unreachable(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+
+    def boom(self):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr("haldio.llm.client.LlmClient.list_models", boom, raising=True)
+    client = TestClient(app)
+    data = client.get("/settings/models").json()
+    assert data["ok"] is False
+    assert "connection refused" in data["error"]
+
+
+def test_settings_test_llm_unreachable_shows_error(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+
+    def boom(self):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr("haldio.llm.client.LlmClient.list_models", boom, raising=True)
+    client = TestClient(app)
+    page = client.get("/settings/test-llm").text
+    assert "result-error" in page and "Fehler" in page
+
+
+def test_settings_test_llm_reports_count_and_missing(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    monkeypatch.setattr(
+        "haldio.llm.client.LlmClient.list_models",
+        lambda self: ["bubo", "qwen3"],
+        raising=True,
+    )
+    client = TestClient(app)
+    page = client.get("/settings/test-llm").text
+    assert "result-ok" in page and "2 Modelle" in page and "gewähltes Modell vorhanden" in page
+
+
+def test_settings_test_llm_flags_a_missing_model(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    monkeypatch.setattr(
+        "haldio.llm.client.LlmClient.list_models", lambda self: ["qwen3"], raising=True
+    )
+    client = TestClient(app)
+    page = client.get("/settings/test-llm").text
+    assert "result-warn" in page and "bubo fehlt" in page
 
 
 def test_job_start_uses_override(tmp_path) -> None:

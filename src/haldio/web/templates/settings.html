@@ -1,67 +1,118 @@
 {% extends "base.html" %}
 {% block title %}Haldio — Einstellungen{% endblock %}
 {% block content %}
+<h1>⚙️ Einstellungen</h1>
+<p class="muted small">Änderungen gelten für Jobs, die nach dem Speichern starten.
+  Ein laufender Job behält seine Einstellungen.</p>
+<form method="post" action="/settings">
+
 <section class="card">
-  <h1>⚙️ Einstellungen</h1>
-  <p class="muted small">Änderungen gelten für Jobs, die nach dem Speichern starten.
-    Ein laufender Job behält seine Einstellungen.</p>
-  <form method="post" action="/settings">
-    <label for="f-url">Adresse (LM Studio)</label>
-    <input id="f-url" name="llm.base_url" value="{{ form['llm.base_url'] }}" size="34">
-    {% if errors.get('llm.base_url') %}<p class="error">{{ errors['llm.base_url'] }}</p>{% endif %}
+  <h2>🧠 Sprachmodell (LLM)</h2>
+  <label for="f-url">Adresse</label>
+  <input id="f-url" name="llm.base_url" value="{{ form['llm.base_url'] }}" size="34" required>
+  {% if errors.get('llm.base_url') %}<p class="error">{{ errors['llm.base_url'] }}</p>{% endif %}
+  <p class="muted small">Wo LM Studio läuft.</p>
 
-    <label for="f-model">Modell</label>
-    <input id="f-model" name="llm.model" value="{{ form['llm.model'] }}" size="24">
-    {% if errors.get('llm.model') %}<p class="error">{{ errors['llm.model'] }}</p>{% endif %}
-    <p>
-      <button type="button" hx-get="/settings/test-llm" hx-target="#llm-test"
-              hx-indicator="#llm-spin">Test LM Studio</button>
-      <span id="llm-spin" class="htmx-indicator">⏳</span>
-      <span id="llm-test" class="test-result"></span>
-    </p>
+  <label for="f-model">Modell</label>
+  <select id="f-model" name="llm.model">
+    <option value="{{ form['llm.model'] }}" selected>{{ form['llm.model'] }}</option>
+  </select>
+  <input id="f-model-free" name="llm.model" value="{{ form['llm.model'] }}" size="24" disabled>
+  {% if errors.get('llm.model') %}<p class="error">{{ errors['llm.model'] }}</p>{% endif %}
 
-    <label for="f-speaker">Sprecher</label>
-    <input id="f-speaker" name="tts.speaker" value="{{ form['tts.speaker'] }}" size="16">
-    <label for="f-lang">Sprache</label>
-    <select id="f-lang" name="tts.language">
-      <option value="auto" {% if form['tts.language'] == 'auto' %}selected{% endif %}>Automatisch</option>
-      <option value="de" {% if form['tts.language'] == 'de' %}selected{% endif %}>Deutsch</option>
-      <option value="en" {% if form['tts.language'] == 'en' %}selected{% endif %}>Englisch</option>
-    </select>
+  <p>
+    <button type="button" id="load-models">🔄 Modelle laden</button>
+    <button type="button" hx-get="/settings/test-llm" hx-target="#llm-test"
+            hx-indicator="#llm-spin">Verbindung testen</button>
+    <span id="llm-spin" class="htmx-indicator">⏳</span>
+    <span id="llm-test" class="test-result"></span>
+  </p>
+  <p id="load-models-result" class="test-result"></p>
+</section>
 
-    <p>
-      <label><input type="checkbox" name="audio.format.mp3"
-        {% if form['audio.format.mp3'] %}checked{% endif %}> MP3</label>
-      <label><input type="checkbox" name="audio.format.ogg"
-        {% if form['audio.format.ogg'] %}checked{% endif %}> OGG</label>
-      {% if errors.get('audio.format.mp3') %}<span class="error">{{ errors['audio.format.mp3'] }}</span>{% endif %}
-    </p>
-    <label for="f-bitrate">Bitrate (kbit/s)</label>
-    <input id="f-bitrate" name="audio.mp3_bitrate_kbps" value="{{ form['audio.mp3_bitrate_kbps'] }}" size="5">
-    {% if errors.get('audio.mp3_bitrate_kbps') %}<p class="error">{{ errors['audio.mp3_bitrate_kbps'] }}</p>{% endif %}
-
-    <p><label><input type="checkbox" name="editor.review_before_tts"
-      {% if form['editor.review_before_tts'] %}checked{% endif %}> Skript vor der Sprachausgabe prüfen</label></p>
-    <p><label><input type="checkbox" name="tts.confirm_before_start"
-      {% if form['tts.confirm_before_start'] %}checked{% endif %}> Vor dem Vorlesen auf mich warten</label></p>
-    <p><label><input type="checkbox" name="editor.fallback_to_source"
-      {% if form['editor.fallback_to_source'] %}checked{% endif %}> Bei fehlendem Hörtext den Originaltext vorlesen</label></p>
-    <label for="f-retries">Wiederholungen der Kontrolle</label>
-    <input id="f-retries" name="editor.max_retries" value="{{ form['editor.max_retries'] }}" size="3">
-    {% if errors.get('editor.max_retries') %}<p class="error">{{ errors['editor.max_retries'] }}</p>{% endif %}
-
-    <div class="actions card-actions">
-      <button type="submit">💾 Speichern</button>
-      <button class="secondary" type="submit" formaction="/settings/reset">↩ Auf Standard zurücksetzen</button>
-    </div>
-  </form>
+<section class="card">
+  <h2>🔊 Sprecher (TTS)</h2>
+  <label for="f-speaker">Sprecher</label>
+  <input id="f-speaker" name="tts.speaker" value="{{ form['tts.speaker'] }}" size="16">
+  <label for="f-lang">Sprache</label>
+  <select id="f-lang" name="tts.language">
+    <option value="auto" {% if form['tts.language'] == 'auto' %}selected{% endif %}>Automatisch</option>
+    <option value="de" {% if form['tts.language'] == 'de' %}selected{% endif %}>Deutsch</option>
+    <option value="en" {% if form['tts.language'] == 'en' %}selected{% endif %}>Englisch</option>
+  </select>
   <p>
     <button type="button" hx-post="/settings/test-tts" hx-target="#tts-test"
-            hx-indicator="#tts-spin">Test TTS</button>
+            hx-indicator="#tts-spin">TTS testen</button>
     <span id="tts-spin" class="htmx-indicator">⏳</span>
     <span id="tts-test" class="test-result"></span>
     <span class="muted small">Startet den TTS-Server — vorher das LLM entladen.</span>
   </p>
-  <p class="muted small">Server: {{ config.server.host }}:{{ config.server.port }} · Version {{ version }}</p>
 </section>
+
+<section class="card">
+  <h2>🔈 Ausgabe</h2>
+  <p>
+    <label><input type="checkbox" name="audio.format.mp3"
+      {% if form['audio.format.mp3'] %}checked{% endif %}> MP3</label>
+    <label><input type="checkbox" name="audio.format.ogg"
+      {% if form['audio.format.ogg'] %}checked{% endif %}> OGG</label>
+    {% if errors.get('audio.format.mp3') %}<span class="error">{{ errors['audio.format.mp3'] }}</span>{% endif %}
+  </p>
+  <label for="f-bitrate">Bitrate (kbit/s)</label>
+  <input id="f-bitrate" name="audio.mp3_bitrate_kbps" value="{{ form['audio.mp3_bitrate_kbps'] }}" size="5">
+  {% if errors.get('audio.mp3_bitrate_kbps') %}<p class="error">{{ errors['audio.mp3_bitrate_kbps'] }}</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>⏳ Ablauf</h2>
+  <p><label><input type="checkbox" name="editor.review_before_tts"
+    {% if form['editor.review_before_tts'] %}checked{% endif %}> Skript vor der Sprachausgabe prüfen</label></p>
+  <p><label><input type="checkbox" name="tts.confirm_before_start"
+    {% if form['tts.confirm_before_start'] %}checked{% endif %}> Vor dem Vorlesen auf mich warten</label></p>
+  <p><label><input type="checkbox" name="editor.fallback_to_source"
+    {% if form['editor.fallback_to_source'] %}checked{% endif %}> Bei fehlendem Hörtext den Originaltext vorlesen</label></p>
+  <label for="f-retries">Wiederholungen der Kontrolle</label>
+  <input id="f-retries" name="editor.max_retries" value="{{ form['editor.max_retries'] }}" size="3">
+  {% if errors.get('editor.max_retries') %}<p class="error">{{ errors['editor.max_retries'] }}</p>{% endif %}
+</section>
+
+<div class="actions card-actions">
+  <button type="submit">💾 Speichern</button>
+  <button class="secondary" type="submit" formaction="/settings/reset">↩ Auf Standard zurücksetzen</button>
+</div>
+</form>
+<p class="muted small">Server: {{ config.server.host }}:{{ config.server.port }} · Version {{ version }}</p>
+
+<script>
+(function () {
+  const sel = document.getElementById("f-model");
+  const free = document.getElementById("f-model-free");
+  const box = document.getElementById("load-models-result");
+  document.getElementById("load-models").addEventListener("click", async () => {
+    box.textContent = "⏳";
+    try {
+      const res = await fetch("/settings/models");
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      const loaded = new Set(data.loaded || []);
+      sel.innerHTML = "";
+      data.models.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = loaded.has(name) ? name + " ✓" : name;
+        sel.appendChild(opt);
+      });
+      if (data.models.includes(data.current)) sel.value = data.current;
+      sel.disabled = false;
+      free.disabled = true;
+      box.textContent = "✓ " + data.models.length + " Modelle geladen";
+    } catch (err) {
+      free.value = sel.value;
+      sel.disabled = true;
+      free.disabled = false;
+      box.textContent = "⚠ LM Studio nicht erreichbar — Namen selbst eintippen.";
+    }
+  });
+})();
+</script>
 {% endblock %}
