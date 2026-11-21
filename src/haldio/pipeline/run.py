@@ -24,7 +24,7 @@ from haldio.pipeline.edit import (
 from haldio.pipeline.editor_output import EDITOR_JSON_SCHEMA, ChunkEdit
 from haldio.pipeline.ingest import ingest
 from haldio.pipeline.master import MasterResult, make_master
-from haldio.pipeline.plan import build_doc_map, quick_summary
+from haldio.pipeline.plan import build_doc_map, llm_summary, quick_summary
 from haldio.pipeline.qa_report import ChunkQA, render_qa_html, write_qa_report
 from haldio.pipeline.speak import SpeakResult, synthesize_script
 from haldio.pipeline.verify import Issue, verify_chunk
@@ -160,8 +160,19 @@ def run_script(
     )
 
     doc_map = build_doc_map(document)
-    if not doc_map.get("summary"):
+    # S3 rule: the LLM writes the real summary; quick_summary is the fallback only
+    client = client_factory() if client_factory else LlmClient(config.llm)
+    try:
+        planned = llm_summary(client, document)
+    finally:
+        if client_factory is None:
+            client.close()
+    if planned:
+        doc_map["summary"], doc_map["main_topics"] = planned
+        doc_map["summary_source"] = "llm"
+    else:
         doc_map["summary"] = quick_summary(document)
+        doc_map["summary_source"] = "fallback"
     _write_json(out_dir / "02_plan" / "doc_map.json", doc_map)
 
     detected = document.language if document.language in ("de", "en") else "de"

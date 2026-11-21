@@ -322,7 +322,7 @@ became a time-shifted process.
 
 - Page count: fixed - `page_count` lands while the stage is still "Einlesen" (structured field from ingest, see Correction 6 - §2.1 below), no longer only at the end.
 - Title fallback: fixed - a PDF without a metadata title gets the first level-1 chapter title, else the file name without extension (`_fallback_title`).
-- Deterministic summary: fixed - `quick_summary()` in plan.py builds up to 6 "heading: first paragraph" snippets; `run_script` stores it when the plan stage produced no summary (wired and tested).
+- Deterministic summary: fixed - `quick_summary()` in plan.py builds up to 6 "heading: first paragraph" snippets; since Correction 6 §2.3 it is the fallback only, the planning LLM writes the real summary (see below).
 - Progress once: fixed - the status block shows ONE bar reading "Gesamt N %"; the old badge in the bar line is gone.
 - Action bar: fixed - bottom bar on the card (border-top): Skript pruefen, Zurueck, "Loeschen" far right; Loeschen is not rendered while the job runs.
 - Library rows: fixed - two-line rows (title + small meta line) with a right-hand jobside column (badge, thin progress bar, percent, Oeffnen, Loeschen) split by border separators; stacks on narrow screens.
@@ -370,5 +370,9 @@ became a time-shifted process.
 ## Correction 6 - §2.2: gate re-check on the worker timer
 
 - done. The 5-second gate re-check runs in the worker thread (`threading.Event.wait` loop), not in browser polls; the 5-minute ask is counted in seconds with `time.monotonic()` (`_GATE_STEP_S`/`_GATE_RECHECK_S`/`_GATE_ASK_AFTER_S`), so a closed or backgrounded tab cannot stall the job. The next check is scheduled 5 s after the previous one finished, so a slow guard call cannot collapse the rhythm. Proof: `test_gate_continues_without_http_request` (job reaches done with no HTTP machinery at all, guard called exactly twice), `test_gate_asks_for_the_button_after_300_seconds`, `test_gate_check_impossible_shows_the_button_hint_after_300_seconds`.
+
+## Correction 6 - §2.3: planning stage writes the real summary
+
+- done. S3 now asks the LLM (`llm_summary` in plan.py, PLANNER_SYSTEM asks for 5-8 sentences + 3-8 topics as JSON; the document text goes as data in the user message, bounded to 6000 chars). On success `doc_map.json` stores the LLM summary and topics with `summary_source: "llm"`; on any failure (LlmError, non-JSON, non-object, empty summary) `quick_summary` fills it with `summary_source: "fallback"`. Proof: `test_run_script_llm_writes_the_plan_summary`, `test_run_script_summary_falls_back_when_llm_fails`, `test_llm_summary_rejects_bad_answers`, plus `summary_source == "fallback"` in `test_run_script_end_to_end`.
 
 Stop - waiting for the owner's OK on the screenshots.

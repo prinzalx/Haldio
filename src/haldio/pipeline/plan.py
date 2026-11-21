@@ -1,15 +1,18 @@
 """Stage S3: build the document map (doc_map.json).
 
-Code does the structure first. The LLM only adds terms when asked.
+Code does the structure first. The LLM writes the real summary and the
+main topics; quick_summary is the fallback when that call fails.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from haldio.extract.model import Block, Document
+from haldio.llm.client import LlmClient
 
 # Patterns from the brief: CamelCase, ALL CAPS, words with digits, quoted terms, code spans.
 _TERM_PATTERNS = [
@@ -178,6 +181,45 @@ def quick_summary(document: Document, max_items: int = 6) -> str:
     if heading and len(parts) < max_items:
         parts.append(heading)
     return " ".join(parts)
+
+
+PLANNER_SYSTEM = (
+    "You write the plan summary for an audiobook project. Read the outline of "
+    "the document and answer with JSON only: \"summary\" holds 5 to 8 "
+    "sentences about the whole document in the language of the document, "
+    "\"topics\" holds 3 to 8 main topics as short phrases."
+)
+
+
+def _planner_input(document: Document, max_chars: int = 6000) -> str:
+    """Outline for the planner: every heading and short paragraph starts."""
+    lines: list[str] = []
+    for block in document.blocks:
+        if block.type == "heading":
+            indent = "  " * max(0, (block.level or 1) - 1)
+            lines.append(f"{indent}# {block.text.strip()}")
+        elif block.type == "paragraph" and block.text.strip():
+            lines.append(block.text.strip()[:200])
+    return "\n".join(lines)[:max_chars]
+
+
+def llm_summary(client: LlmClient, document: Document) -> tuple[str, list[str]] | None:
+    """Ask the LLM for the real summary and the main topics (S3).
+
+    Returns None on any failure; the caller then uses quick_summary.
+    """
+    try:
+        answer = client.chat(PLANNER_SYSTEM, _planner_input(document))
+        data = json.loads(answer.text)
+    except Exception:  # noqa: BLE001 - any planner failure goes to the fallback
+        return None
+    if not isinstance(data, dict):
+        return None
+    summary = str(data.get("summary", "")).strip()
+    topics = [str(t).strip() for t in data.get("topics", []) if str(t).strip()]
+    if not summary:
+        return None
+    return summary, topics
 
 
 def build_doc_map(

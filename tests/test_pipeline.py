@@ -136,11 +136,123 @@ def test_run_script_end_to_end(tmp_path, monkeypatch) -> None:
     doc_map = json.loads(
         (tmp_path / "job" / "02_plan" / "doc_map.json").read_text(encoding="utf-8")
     )
-    assert doc_map["summary"] == "KURZGEHALTEN"  # empty plan summary gets quick_summary
+    assert doc_map["summary"] == "KURZGEHALTEN"  # fake answer has no summary key
+    assert doc_map["summary_source"] == "fallback"
     script = tmp_path / "job" / "04_script" / "script.md"
     assert script.is_file()
     assert "Gesprochener Text" in script.read_text(encoding="utf-8")
     assert (tmp_path / "job" / "qa_report.html").is_file()
+
+
+def test_llm_summary_rejects_bad_answers() -> None:
+    """Non-JSON and non-object answers go to the fallback (return None)."""
+
+    class _Answer:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    class _Client:
+        def __init__(self, text: str) -> None:
+            self._text = text
+
+        def chat(self, system: str, user: str, **kwargs) -> _Answer:
+            return _Answer(self._text)
+
+    doc = _doc()
+    from haldio.pipeline.plan import llm_summary
+
+    assert llm_summary(_Client("not json"), doc) is None
+    assert llm_summary(_Client("[1, 2]"), doc) is None
+    assert llm_summary(_Client('{"summary": "", "topics": []}'), doc) is None
+    assert llm_summary(_Client('{"summary": "Fünf Sätze.", "topics": ["A"]}'), doc) == (
+        "Fünf Sätze.",
+        ["A"],
+    )
+
+
+def test_run_script_llm_writes_the_plan_summary(tmp_path) -> None:
+    """S3: the planner answer becomes the summary and the main topics."""
+    import json
+
+    import httpx
+
+    from haldio.config import Config
+    from haldio.llm.client import LlmClient
+    from haldio.pipeline.run import run_script
+    from synthetic import make_test_pdf
+
+    planner = {
+        "summary": "Fünf Sätze über das Buch. Satz zwei. Satz drei. Satz vier. Satz fünf.",
+        "topics": ["Aufnahme", "Mischung", "Mastering"],
+    }
+    editor = {
+        "blocks": [{"kind": "paragraph", "text": "Gesprochener Text mit Wert 5."}],
+        "warnings": [],
+        "unresolved_references": [],
+    }
+    answers = iter([json.dumps(planner)])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = next(answers, json.dumps(editor))
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    config = Config()
+
+    def factory() -> LlmClient:
+        return LlmClient(config.llm, transport=httpx.MockTransport(handler))
+
+    result = run_script(
+        make_test_pdf(tmp_path / "d.pdf"), config, tmp_path / "job", client_factory=factory
+    )
+    assert result.return_code == 0
+    doc_map = json.loads(
+        (tmp_path / "job" / "02_plan" / "doc_map.json").read_text(encoding="utf-8")
+    )
+    assert doc_map["summary_source"] == "llm"
+    assert doc_map["summary"].startswith("Fünf Sätze")
+    assert doc_map["main_topics"] == ["Aufnahme", "Mischung", "Mastering"]
+
+
+def test_run_script_summary_falls_back_when_llm_fails(tmp_path, monkeypatch) -> None:
+    """A failing planner call keeps quick_summary and stores the source."""
+    import json
+
+    import httpx
+
+    from haldio.config import Config
+    from haldio.llm.client import LlmClient
+    from haldio.pipeline.run import run_script
+    from synthetic import make_test_pdf
+
+    monkeypatch.setattr("haldio.pipeline.run.quick_summary", lambda doc: "FALLBACK")
+    editor = {
+        "blocks": [{"kind": "paragraph", "text": "Gesprochener Text mit Wert 5."}],
+        "warnings": [],
+        "unresolved_references": [],
+    }
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("down", request=request)  # planner call fails
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(editor)}}]})
+
+    config = Config()
+
+    def factory() -> LlmClient:
+        return LlmClient(config.llm, transport=httpx.MockTransport(handler))
+
+    result = run_script(
+        make_test_pdf(tmp_path / "d.pdf"), config, tmp_path / "job", client_factory=factory
+    )
+    assert result.return_code == 0
+    doc_map = json.loads(
+        (tmp_path / "job" / "02_plan" / "doc_map.json").read_text(encoding="utf-8")
+    )
+    assert doc_map["summary_source"] == "fallback"
+    assert doc_map["summary"] == "FALLBACK"
+    assert calls["n"] >= 2  # the edit stage still ran after the planner failure
 
 
 def test_parse_rejects_answer_without_blocks_key() -> None:
