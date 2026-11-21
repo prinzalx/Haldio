@@ -978,6 +978,10 @@ def test_settings_speaker_card_lists_nine_speakers(app_parts) -> None:
     assert 'id="probe-btn"' in page
     assert ":checked" in page  # button reads the voice selected by radio
     assert "f-probe-text" in page  # and the Testtext field from the hx-vals
+    # the js in hx-vals must stay valid JavaScript: attribute in double
+    # quotes, JS strings in single quotes (a browser click test found this)
+    assert 'hx-vals="js:' in page
+    assert "hx-vals='js:" not in page
     assert "vorher das LLM entladen" in page  # guard warning text
     assert 'id="f-lang"' in page  # Sprache stays Automatisch/Deutsch/Englisch
 

@@ -37,7 +37,7 @@
   <label for="f-probe-text">Testtext für die Hörprobe</label>
   <input id="f-probe-text" size="48" placeholder="Guten Tag. Dies ist eine Hörprobe.">
   <button type="button" id="probe-btn" hx-post="/settings/sample"
-          hx-vals='js:{voice: (document.querySelector("input[name=&quot;tts.speaker&quot;]:checked") || {}).value || "dylan", text: document.getElementById("f-probe-text").value, language: document.getElementById("f-lang").value}'
+          hx-vals="js:{voice: (document.querySelector('input[name=&quot;tts.speaker&quot;]:checked') || {}).value || 'dylan', text: document.getElementById('f-probe-text').value, language: document.getElementById('f-lang').value}"
           hx-target="#probe-result" hx-indicator="#probe-spin">Hörprobe erzeugen</button>
   <span id="probe-spin" class="htmx-indicator">⏳</span>
   <span id="probe-result" class="test-result"></span>

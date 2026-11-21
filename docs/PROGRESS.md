@@ -436,6 +436,10 @@ Stop - waiting for the owner's OK on the screenshots.
   and `f-probe-text` in hx-vals), `test_settings_sample_endpoint_with_mock`
   (label in response). 177 tests pass; screenshots regenerated; reviewer
   accepted.
+- Follow-up (owner: click did nothing): the hx-vals attribute used single
+  quotes and the decoded `&quot;` broke the JS string; rebuilt as
+  `hx-vals="js:...'input[...]...'` - browser click test (playwright, mock TTS) now proves
+  vivian is probed when selected; pytest pins the quoting style.
 
 ## Owner package 2026-11-21 - settings probes, old findings, batch upload
 
