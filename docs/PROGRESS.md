@@ -340,11 +340,9 @@ became a time-shifted process.
 
 ## Correction 5 - section 9 Tests, screenshots, finish
 
-- Tests: 133 pass, ruff clean (src + tests) - the section 1-5 tests are done; the spec-9 tests for top bar and settings are open (built with section 8).
-- Screenshots: partial - `scripts/screenshots.py` (temp data dir, mock backend, port 8765 -
-  the live `haldio serve` and `data/` were never touched) captured library, running job,
-  finished job and review in light AND dark into `docs/screenshots/`; the seed message now
-  shows the current wording ("noch etwa").
+- Tests: done - the section 1-5 tests and the spec-9 tests for top bar and settings are all in `tests/test_web.py` (172 pass).
+- Screenshots: superseded - the 4-page set was replaced by the full correction 6 set
+  (see "Correction 6 - section 9" below); `job_running_*` files deleted.
 - README: done - the "Web interface" section describes the correction 5 state (Gerade box,
   Gesamt %, card-bottom actions with Loeschen hidden while running, sticky top bar with
   active-page mark).
@@ -378,5 +376,29 @@ became a time-shifted process.
 ## Correction 6 - §2.4: original column shows all block content
 
 - done. Fact check on the real job (274 chunks): the review page joined the `text` of ALL blocks, so headings, paragraphs and footnotes were visible - but table blocks carry their content in `cells` (`text` is one space) and list blocks in `list_items` (text empty when the bullet marker is a separate glyph), and `make_chunks` never stored `list_items` at all. So tables and lists were hidden in the Original column. The owner's example chunk c0131 really holds only heading + 24-char paragraph (page-tail chunk); the box is `max-height: 260 px; overflow-y: auto` (scrolls, does not clip to two lines). Fix: `_block_display` in web/app.py falls back to cells (rows joined, separated by "; ") and list_items; chunk.py stores `list_items` from now on. Caveat: historical `03_edit/chunks/*.in.json` files lack `list_items` until re-chunking, so old jobs show tables but not list items. The editor message and cache hash change because `build_user_message` now dumps `list_items` too (chunks re-edit once after upgrade). Proof: `test_review_original_shows_tables_and_lists`, `test_chunk_keeps_table_cells_and_list_items`, `test_review_use_original_includes_table_cells`.
+
+
+## Correction 6 - section 9 Tests and screenshots
+
+- Full screenshot set: done - `scripts/screenshots.py` (rewritten; temp data dirs, mock
+  backend so no TTS model starts, ports 8765/8766 - the live `haldio serve` and `data/`
+  were never touched) captured 8 pages x light + dark = 16 PNGs into `docs/screenshots/`:
+  `job_editing_*` (running editing job, live detail "das Sprachmodell schreibt seit 38 s
+  (etwa 410 Token)"), `job_llm_unload_*` ("Bitte das LLM in LM Studio entladen, dann
+  Weiter drücken."), `job_speaking_*`, `job_failed_*`, `job_finished_*`, `review_*`
+  (third section has empty blocks -> "Für diesen Abschnitt gibt es keinen Hörtext."),
+  `library_*` (exactly 3 jobs from a second index), `settings_*`.
+- Width checks: done - `width{360,768,1280}_{library,job_editing}_light.png` in
+  `docs/screenshots/`; the script prints an overflow check per page and reported
+  overflow=False at all three widths (SCREENSHOTS-OK).
+- Section 9 tests: done (already present before this section) -
+  `test_topbar_has_only_the_logo_link` (incl. no "dev" version in the bar),
+  `test_version_shows_in_footer_and_settings`, `test_settings_save_writes_override_file`,
+  `test_settings_save_rejects_bad_bitrate`, `test_settings_reset_removes_override`,
+  `test_settings_no_paths_in_rendered_html`, `test_settings_model_list_marks_loaded`,
+  `test_settings_model_list_reports_unreachable`, `test_settings_sample_guard_stops`,
+  `test_settings_test_tts_guard_stops` (all in `tests/test_web.py`).
+- Reviewer: implementation-reviewer checked section 9 against correction-6.md; verdict
+  accept, the only justified change (this PROGRESS entry + stale-line fix) is applied here.
 
 Stop - waiting for the owner's OK on the screenshots.
