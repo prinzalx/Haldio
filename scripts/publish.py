@@ -25,15 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Only paths below are published; everything else stays in haldio_dev.
 PUBLIC_PREFIXES = (
-    ".github/",
     "src/",
-    "tests/",
     "prompts/",
     "docs/configuration.md",
-    "docs/decisions/",
     "docs/screenshots/",
-    "scripts/eval_editor.py",
-    "scripts/screenshots.py",
     ".gitignore",
     "LICENSE",
     "README.md",
