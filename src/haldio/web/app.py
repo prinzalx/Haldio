@@ -373,6 +373,14 @@ def create_app(
         clear_override(config.paths.data_dir)
         return RedirectResponse("/settings?reset=1", status_code=303)
 
+    @app.get("/dokumentation", response_class=PlainTextResponse)
+    def dokumentation() -> PlainTextResponse:
+        """The settings manual; paths live in the docs, not in the UI."""
+        path = Path(__file__).resolve().parents[3] / "docs" / "configuration.md"
+        if not path.is_file():
+            raise HTTPException(status_code=404)
+        return PlainTextResponse(path.read_text(encoding="utf-8"))
+
     @app.get("/settings/test-llm", response_class=HTMLResponse)
     def test_llm() -> HTMLResponse:
         from haldio.llm.client import LlmClient, LlmError

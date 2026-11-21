@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -952,6 +953,28 @@ def test_settings_rare_field_error_opens_advanced(app_parts) -> None:
     assert page.status_code == 422
     assert "Temperatur: Zahl zwischen 0 und 2." in page.text
     assert '<details class="card open">' in page.text  # error stays visible
+
+
+def test_settings_no_paths_in_rendered_html(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings").text
+    visible = re.sub(r'(value|src|href|action)="[^"]*"', "x", page)
+    assert not re.search(r"[A-Za-z]:[\\/]", visible)  # no drive letters
+    assert "../" not in visible  # no folder walks
+    assert "settings.local.yaml" not in visible  # no file names either
+    assert ">Dokumentation</a>" in page  # the paths live in the docs
+
+
+def test_documentation_page_served(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    doc = client.get("/dokumentation")
+    assert doc.status_code == 200
+    text = doc.text
+    assert "settings.local.yaml" in text  # override file explained
+    assert "qwen-talker" in text  # model file paths explained
+    assert "Neustart nötig" in text
 
 
 def test_settings_test_llm_unreachable_shows_error(app_parts, monkeypatch) -> None:
