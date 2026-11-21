@@ -15,6 +15,7 @@ from haldio.pipeline.master import MasterResult
 from haldio.pipeline.run import BookResult, ScriptResult
 from haldio.pipeline.speak import SpeakResult
 from haldio.settings_store import save_override
+from haldio.tts.base import ModelGuardError
 from haldio.web.app import create_app
 
 
@@ -788,6 +789,89 @@ def test_settings_model_list_reports_unreachable(app_parts, monkeypatch) -> None
     data = client.get("/settings/models").json()
     assert data["ok"] is False
     assert "connection refused" in data["error"]
+
+
+def test_settings_speaker_card_lists_nine_speakers(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    page = client.get("/settings").text
+    assert "Sprecher (TTS)" in page
+    assert page.count('name="tts.speaker"') == 9  # nine radio rows
+    assert "Hauptsprache Chinesisch; Deutsch klingt unverändert" in page
+    row = page.split('value="dylan"', 1)[1][:30]
+    assert "checked" in row  # the chosen speaker is marked
+    assert "Hörprobe erzeugen" in page
+    assert "vorher das LLM entladen" in page  # guard warning text
+    assert 'id="f-lang"' in page  # Sprache stays Automatisch/Deutsch/Englisch
+
+
+def test_settings_sample_endpoint_with_mock(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post("/settings/sample", data={"voice": "dylan"})
+    assert response.status_code == 200
+    data_dir = app.state.config.paths.data_dir
+    assert (data_dir / "samples" / "dylan.wav").is_file()
+    assert "<audio" in response.text
+    page = client.get("/settings").text
+    assert "/samples/dylan.wav" in page  # existing sample plays first, no button
+    assert client.get("/samples/dylan.wav").status_code == 200
+    assert client.get("/samples/ohne.wav").status_code == 404
+
+
+def test_settings_sample_guard_stops(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+
+    def boom(*a, **k):
+        raise ModelGuardError("LM Studio lädt noch")
+
+    monkeypatch.setattr("haldio.tts.create_backend", boom, raising=True)
+    client = TestClient(app)
+    page = client.post("/settings/sample", data={"voice": "vivian"}).text
+    assert "Gestoppt" in page and "result-warn" in page
+
+
+def test_settings_test_tts_guard_stops(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+
+    def boom(*a, **k):
+        raise ModelGuardError("LM Studio lädt noch")
+
+    monkeypatch.setattr("haldio.tts.create_backend", boom, raising=True)
+    client = TestClient(app)
+    page = client.post("/settings/test-tts").text
+    assert "Gestoppt" in page and "result-warn" in page
+
+
+def test_settings_quality_lists_existing_models_only(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    models = app.state.config.paths.data_dir / "modelle"
+    models.mkdir()
+    q8 = models / "qwen-talker-1.7b-customvoice-Q8_0.gguf"
+    q4 = models / "qwen-talker-1.7b-customvoice-Q4_K_M.gguf"
+    gone = models / "qwen-talker-1.7b-customvoice-Q6_K.gguf"  # listed, not on disk
+    q8.write_bytes(b"x")
+    q4.write_bytes(b"x")
+    monkeypatch.setattr(app.state.config.tts, "qwencpp_model", str(q8), raising=True)
+    monkeypatch.setattr(
+        app.state.config.tts, "qwencpp_codec", str(gone), raising=True
+    )  # codec is not listed; only talker files are
+    client = TestClient(app)
+    page = client.get("/settings").text
+    assert "Standard (Q8)" in page
+    assert "Kleiner und schneller (Q4)" in page
+    assert "Q6" not in page  # a file that does not exist is not offered
+    form = dict(_SETTINGS_FORM, **{"tts.qwencpp_model": str(q4)})
+    response = client.post("/settings", data=form, follow_redirects=False)
+    assert response.status_code == 303
+    text = (app.state.config.paths.data_dir / "settings.local.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "Q4_K_M" in text
+    bad = dict(_SETTINGS_FORM, **{"tts.qwencpp_model": str(gone)})
+    page = client.post("/settings", data=bad)
+    assert page.status_code == 422
+    assert "Modell-Datei nicht gefunden." in page.text
 
 
 def test_settings_test_llm_unreachable_shows_error(app_parts, monkeypatch) -> None:

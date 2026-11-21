@@ -91,6 +91,13 @@ def parse_form(data: dict[str, str]) -> tuple[dict[str, object], dict[str, str]]
     speaker = (data.get("tts.speaker") or "").strip()
     if speaker:  # an empty field keeps the default, it never wipes it
         put("tts", "speaker", speaker)
+    model_file = (data.get("tts.qwencpp_model") or "").strip()
+    if not model_file:
+        pass  # keeps the configured model file
+    elif Path(model_file).is_file():
+        put("tts", "qwencpp_model", model_file)
+    else:
+        errors["tts.qwencpp_model"] = "Modell-Datei nicht gefunden."
     language = data.get("tts.language") or "auto"
     if language in ("auto", "de", "en"):
         put("tts", "language", language)

@@ -127,6 +127,9 @@ form { display: inline; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }
 .error { color: var(--bad-text); }
+.voicerow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.voicerow label { flex: 1 1 300px; }
+.voicerow audio { max-width: 100%; height: 36px; }
 .empty { color: var(--muted); font-style: italic; }
 progress {
   width: 120px; height: 10px; vertical-align: middle;

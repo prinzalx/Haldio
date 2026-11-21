@@ -32,8 +32,33 @@
 
 <section class="card">
   <h2>🔊 Sprecher (TTS)</h2>
-  <label for="f-speaker">Sprecher</label>
-  <input id="f-speaker" name="tts.speaker" value="{{ form['tts.speaker'] }}" size="16">
+  <p class="muted small">Neun Stimmen des Modells. Eine Hörprobe startet den TTS-Server — vorher das LLM entladen.</p>
+  <div class="voicelist">
+    {% for s in speakers %}
+    <p class="voicerow">
+      <label><input type="radio" name="tts.speaker" value="{{ s.id }}"
+        {% if s.selected %}checked{% endif %}> {{ s.text }}</label>
+      {% if s.sample %}
+      <audio controls preload="none" src="/samples/{{ s.id }}.wav"></audio>
+      {% else %}
+      <button type="button" hx-post="/settings/sample" hx-vals='{"voice": "{{ s.id }}"}'
+              hx-target="#probe-{{ s.id }}" hx-indicator="#probe-spin-{{ s.id }}">Hörprobe erzeugen</button>
+      <span id="probe-spin-{{ s.id }}" class="htmx-indicator">⏳</span>
+      <span id="probe-{{ s.id }}" class="test-result"></span>
+      {% endif %}
+    </p>
+    {% endfor %}
+  </div>
+  {% if errors.get('tts.speaker') %}<p class="error">{{ errors['tts.speaker'] }}</p>{% endif %}
+
+  <label for="f-quality">Qualität</label>
+  <select id="f-quality" name="tts.qwencpp_model">
+    {% for q in qualities %}
+    <option value="{{ q.path }}" {% if q.path == form['tts.qwencpp_model'] %}selected{% endif %}>{{ q.label }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.get('tts.qwencpp_model') %}<p class="error">{{ errors['tts.qwencpp_model'] }}</p>{% endif %}
+
   <label for="f-lang">Sprache</label>
   <select id="f-lang" name="tts.language">
     <option value="auto" {% if form['tts.language'] == 'auto' %}selected{% endif %}>Automatisch</option>

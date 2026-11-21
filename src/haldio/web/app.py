@@ -39,6 +39,7 @@ from haldio.settings_store import (
 )
 from haldio.tts.base import ModelGuardError
 from haldio.web.labels import stage_help, status_label, stepper_state, warning_text
+from haldio.web.voices import speaker_rows
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -336,7 +337,12 @@ def create_app(
         return templates.TemplateResponse(
             request,
             "settings.html",
-            {"config": eff, "form": _form_from_config(eff), "errors": {}},
+            {
+                "config": eff,
+                "form": _form_from_config(eff),
+                "errors": {},
+                **_speaker_context(config, eff),
+            },
         )
 
     @app.post("/settings")
@@ -348,7 +354,12 @@ def create_app(
             return templates.TemplateResponse(
                 request,
                 "settings.html",
-                {"config": eff, "form": data, "errors": errors},
+                {
+                    "config": eff,
+                    "form": data,
+                    "errors": errors,
+                    **_speaker_context(config, eff, data.get("tts.speaker", "")),
+                },
                 status_code=422,
             )
         merged = load_override(config.paths.data_dir)
@@ -408,13 +419,14 @@ def create_app(
         from haldio.tts import create_backend
         from haldio.tts.qwen_local import QwenLocalBackend
 
-        backend = create_backend(effective_config(config).tts)
+        backend = None
         try:
+            backend = create_backend(effective_config(config).tts)
             if isinstance(backend, QwenLocalBackend):
                 try:
                     result = backend.check(
                         "Guten Tag. Dies ist ein Test der Sprachausgabe.",
-                        Path("data") / "tts-check.wav",
+                        config.paths.data_dir / "tts-check.wav",
                     )
                     voices = ", ".join(str(s) for s in result["speakers"][:10])
                     text = f"TTS ok: Stimmen {voices or 'keine'}"
@@ -430,8 +442,45 @@ def create_app(
         except ModelGuardError as error:
             text = f"Gestoppt: {error}"
         finally:
-            backend.close()
+            if backend is not None:
+                backend.close()
         return HTMLResponse(_result_span(text))
+
+    @app.get("/samples/{voice}.wav")
+    def sample_audio(voice: str) -> FileResponse:
+        path = _sample_dir(config) / f"{voice}.wav"
+        if not _SAFE_VOICE.fullmatch(voice) or not path.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(path, media_type="audio/wav")
+
+    @app.post("/settings/sample", response_class=HTMLResponse)
+    def make_sample(voice: str = Form(...)) -> HTMLResponse:
+        """Hörprobe für eine Stimme; startet den TTS-Server durch den Modell-Guard."""
+        from haldio.tts import create_backend
+        from haldio.tts.base import TTSParams
+
+        if not _SAFE_VOICE.fullmatch(voice):
+            raise HTTPException(status_code=404)
+        backend = None
+        try:
+            backend = create_backend(effective_config(config).tts)
+            audio = backend.synthesize(_SAMPLE_TEXT, "de", TTSParams(voice=voice))
+            out = _sample_dir(config) / f"{voice}.wav"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(audio.data)
+            stamp = int(datetime.now(UTC).timestamp())
+            body = (
+                '<span class="result-ok">Hörprobe fertig</span> '
+                f'<audio controls src="/samples/{voice}.wav?v={stamp}"></audio>'
+            )
+            return HTMLResponse(body)
+        except ModelGuardError as error:
+            return HTMLResponse(_result_span(f"Gestoppt: {error}"))
+        except Exception as error:  # noqa: BLE001 - show any TTS error in the UI
+            return HTMLResponse(_result_span(f"Fehler: {error}"))
+        finally:
+            if backend is not None:
+                backend.close()
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str, request: Request) -> RedirectResponse:
@@ -475,6 +524,7 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
         "llm.base_url": cfg.llm.base_url,
         "llm.model": cfg.llm.model,
         "tts.speaker": cfg.tts.speaker,
+        "tts.qwencpp_model": cfg.tts.qwencpp_model,
         "tts.language": cfg.tts.language,
         "audio.format.mp3": "on" if "mp3" in cfg.audio.formats else "",
         "audio.format.ogg": "on" if "ogg" in cfg.audio.formats else "",
@@ -484,6 +534,45 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
         "editor.fallback_to_source": "on" if cfg.editor.fallback_to_source else "",
         "editor.max_retries": str(cfg.editor.max_retries),
     }
+
+
+_SAFE_VOICE = re.compile(r"[A-Za-z0-9_.-]{1,40}")
+_SAMPLE_TEXT = "Guten Tag. Dies ist eine Hörprobe."
+
+
+def _sample_dir(cfg: Config) -> Path:
+    return cfg.paths.data_dir / "samples"
+
+
+def _speaker_context(
+    base: Config, eff: Config, selected: str | None = None
+) -> dict[str, Any]:
+    """Speaker radio rows (chosen one flagged, sample flag set) plus quality options."""
+    rows = speaker_rows(selected or eff.tts.speaker or "dylan")
+    for row in rows:
+        row["sample"] = (_sample_dir(base) / f"{row['id']}.wav").is_file()
+    return {"speakers": rows, "qualities": _quality_options(eff)}
+
+
+def _quality_options(cfg: Config) -> list[dict[str, str]]:
+    """Talker model files that exist on disk, plain-word labels, no paths shown."""
+
+    def label_of(name: str) -> str:
+        if "Q8" in name:
+            return "Standard (Q8)"
+        if "Q4" in name:
+            return "Kleiner und schneller (Q4)"
+        return name
+
+    models_dir = Path(cfg.tts.qwencpp_model).parent
+    options = [
+        {"path": str(path), "label": label_of(path.name)}
+        for path in sorted(models_dir.glob("qwen-talker-*.gguf"))
+    ]
+    if not options:
+        fallback = Path(cfg.tts.qwencpp_model)
+        options = [{"path": str(fallback), "label": label_of(fallback.name)}]
+    return options
 
 
 def _result_span(text: str) -> str:
