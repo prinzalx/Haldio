@@ -421,3 +421,37 @@ became a time-shifted process.
   output shown as lowercase "mp3".
 
 Stop - waiting for the owner's OK on the screenshots.
+
+
+## Owner package 2026-11-21 - settings probes, old findings, batch upload
+
+- Hörprobe test text: done - `POST /settings/sample` takes `text` + `language`;
+  blank text uses the default sentence of the selected language (`_PROBE_TEXTS`),
+  entered text is collapsed and capped at 200 chars; settings card has the field
+  "Testtext für die Hörprobe". Proof: `test_settings_sample_uses_the_test_text`,
+  `test_settings_sample_language_falls_back_to_default_text`.
+- Voices show names only: done - `speaker_rows` returns the plain label; the
+  description text ("Hauptsprache … Deutsch klingt unverändert") is gone from the
+  page. Proof: `test_settings_speaker_card_lists_nine_speakers` (asserts
+  "Hauptsprache" NOT in page).
+- Probe follows the selected Sprache: done - the language from the Sprache select
+  goes to `backend.synthesize` (was hardcoded "de"). Proof: same two sample tests.
+- Old finding `_STAGE_LABELS`: resolved - worker.py derives `_STAGE_LABELS =
+  dict(STAGES)` from `haldio.web.labels` (one source, no drift).
+- Old finding gate button too early: resolved - the continue form renders only when
+  the hint says "Weiter" or "Erneut prüfen" (hidden during the automatic 5-s
+  re-check). Proof: `test_gate_button_offered_only_after_the_ask`.
+- Old findings "mp3 lowercase" and "app.py split": discarded - the download labels
+  come from `_FILE_SLOTS` ("MP3", "OGG") and are already uppercase; the split is a
+  style-only change deferred until the next structural work (owner delegated the
+  call: "loesen oder verwerfen je nach notwendigkeit").
+- Stapelfunktion (batch upload): done - `/upload` accepts several PDFs at once
+  (input `multiple`, drop works too); ALL files are read and validated before the
+  first job is created, each file gets its own job (own options copy) and all jobs
+  run through the FIFO queue; a batch redirects to the library, a single file keeps
+  its job-page redirect. The ready2tts pool + "Alle TTS starten" converts the whole
+  prepared stack afterwards. Proof: `test_upload_batch_creates_one_job_per_pdf`,
+  `test_upload_batch_rejects_when_one_file_is_no_pdf`.
+- Screenshots regenerated after the settings changes (names-only rows, test-text
+  field). Reviewer: implementation-reviewer accepted the package; both justified
+  changes (drop dead voice description fields, copy options per job) applied.

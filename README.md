@@ -52,10 +52,12 @@ Open http://127.0.0.1:8505 (German user interface).
 
 ## Web interface
 
-- **Bücherei** — upload card with drag & drop, language and voice choice and the
-  "Skript vor der Sprachausgabe prüfen" option; the job list shows title, file,
-  pages, audio length, date, a German status badge and progress, newest first.
-  A banner counts jobs waiting in the ready2tts pool ("Alle TTS starten").
+- **Bücherei** — upload card with drag & drop: pick or drop several PDFs at once
+  (batch), choose language and voice and the "Skript vor der Sprachausgabe prüfen"
+  option; every file becomes its own job and the queue prepares them one by one.
+  The job list shows title, file, pages, audio length, date, a German status badge
+  and progress, newest first. A banner counts jobs waiting in the ready2tts pool
+  ("Alle TTS starten").
 - **Job page** — a seven-stage stepper (Einlesen → … → Audio fertigstellen) with state text,
   progress bar ("Gesamt N %") and a "Gerade:" box that explains the current step and shows
   the live detail from a single activity record; while the editor LLM writes it reports
@@ -80,7 +82,9 @@ Open http://127.0.0.1:8505 (German user interface).
 - **Einstellungen** — the full settings page: readable groups with German names, edits
   are validated (bitrate, pauses…), saving writes `data/settings.local.yaml` ("Auf
   Standard zurücksetzen" removes it), the LM Studio card lists models and marks the
-  loaded ones, "Test LM Studio" and "Test TTS"
+  loaded ones, the speaker card lists the nine voices by name and "Hörprobe erzeugen"
+  speaks the optional test text ("Testtext für die Hörprobe") in the selected language,
+  "Test LM Studio" and "Test TTS"
   show a spinner and a clear result next to the button (TTS respects the model
   guard: the LLM must be unloaded first).
 - Light and dark theme (system preference, switchable, remembered). The top bar sticks
