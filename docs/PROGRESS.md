@@ -317,3 +317,15 @@ became a time-shifted process.
 - Tooltips: fixed - every stepper chip carries title= with its explanation.
 - Percent: fixed - the bar now reads "Gesamt 32 %" (job total).
 - Tests: 125 pass - existing label assertions updated to the new German words.
+
+## Correction 5 - section 5 Job page layout
+
+- Page count: fixed - `page_count` lands while the stage is still "Einlesen" (the worker parses "N Seiten gelesen" from the progress note at 7 %), no longer only at the end.
+- Title fallback: fixed - a PDF without a metadata title gets the first level-1 chapter title, else the file name without extension (`_fallback_title`).
+- Deterministic summary: fixed - `quick_summary()` in plan.py builds up to 6 "heading: first paragraph" snippets; `run_script` stores it when the plan stage produced no summary (wired and tested).
+- Progress once: fixed - the status block shows ONE bar reading "Gesamt N %"; the old badge in the bar line is gone.
+- Action bar: fixed - bottom bar on the card (border-top): Skript pruefen, Zurueck, "Loeschen" far right; Loeschen is not rendered while the job runs.
+- Library rows: fixed - two-line rows (title + small meta line) with a right-hand jobside column (badge, thin progress bar, percent, Oeffnen, Loeschen) split by border separators; stacks on narrow screens.
+- Danger button: fixed - white text on #b3261e (WCAG AA in both themes); the dead old rule was removed after the review.
+- Placeholder: fixed - "Wird erstellt ..." shows in the summary card wherever nothing is computed yet.
+- Tests: 130 pass - early page count, title fallback incl. level-1 filter, quick_summary wording and truncation, delete hidden while running, placeholders, doc_map summary wiring.

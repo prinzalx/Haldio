@@ -24,7 +24,7 @@ from haldio.pipeline.edit import (
 from haldio.pipeline.editor_output import EDITOR_JSON_SCHEMA, ChunkEdit
 from haldio.pipeline.ingest import ingest
 from haldio.pipeline.master import MasterResult, make_master
-from haldio.pipeline.plan import build_doc_map
+from haldio.pipeline.plan import build_doc_map, quick_summary
 from haldio.pipeline.qa_report import ChunkQA, render_qa_html, write_qa_report
 from haldio.pipeline.speak import SpeakResult, synthesize_script
 from haldio.pipeline.verify import Issue, verify_chunk
@@ -152,6 +152,8 @@ def run_script(
     report("extracting", 7, f"{ingested.page_count} Seiten gelesen #summary")
 
     doc_map = build_doc_map(document)
+    if not doc_map.get("summary"):
+        doc_map["summary"] = quick_summary(document)
     _write_json(out_dir / "02_plan" / "doc_map.json", doc_map)
 
     detected = document.language if document.language in ("de", "en") else "de"

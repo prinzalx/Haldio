@@ -109,7 +109,6 @@ button {
   padding: 4px 10px; cursor: pointer; font: inherit;
 }
 button.secondary { background: var(--panel-2); color: var(--text); }
-button.danger { background: var(--bad-bg); color: var(--bad-text); }
 form { display: inline; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }
@@ -172,7 +171,14 @@ ul.joblist { list-style: none; margin: 0; padding: 0; }
 }
 .jobmain { flex: 1 1 240px; min-width: 0; }
 .jobtitle { font-weight: 600; }
-.jobstate { display: flex; gap: 6px; align-items: center; }
+.jobside { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.jobside > * + * { border-left: 1px solid var(--border); padding-left: 12px; }
+progress.thin { width: 70px; height: 4px; }
+.far-right { margin-left: auto; }
+.card-actions {
+  border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px;
+}
+button.danger { background: #b3261e; color: #fff; }
 .banner { border-color: var(--warn-bg); }
 
 /* --- correction 4: stepper --- */
@@ -255,6 +261,8 @@ ul.warnings { margin: 4px 0; padding-left: 18px; color: var(--warn-text); font-s
 @media (max-width: 640px) {
   .chunk-cols { grid-template-columns: 1fr; }
   .jobrow { flex-direction: column; align-items: start; }
+  .jobside { width: 100%; }
+  .jobside > * + * { border-left: 0; padding-left: 0; }
   table.config tr { display: block; border-bottom: 1px solid var(--border); padding: 4px 0; }
   table.config th, table.config td { border: 0; display: block; }
   table.config th { padding-top: 6px; }

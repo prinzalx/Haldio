@@ -3,8 +3,9 @@
 {% block content %}
 <section class="card">
   <h1>🎧 {{ job.title or job.file_name }}</h1>
-  <p class="muted">{{ job.file_name }} · hochgeladen {{ job.created_at | date }}
-     · {{ job.page_count or "?" }} Seiten</p>
+  <p class="muted small">{% if job.title and job.title != job.file_name %}{{ job.file_name }}
+    · {% endif %}hochgeladen {{ job.created_at | date }}{% if job.page_count %}
+    · {{ job.page_count }} Seiten{% endif %}</p>
   {% include "partials/job_status.html" %}
   <details class="stage-help">
     <summary>Was bedeuten die Schritte?</summary>
@@ -14,21 +15,26 @@
     </table>
   </details>
   {% include "partials/logtail.html" %}
-  <div class="actions">
+  {% set running = job.status not in ("done", "failed", "cancelled") %}
+  <div class="actions card-actions">
     {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen (optional)
       {%- if review_hints %} · {{ review_hints }} Hinweis{{ "e" if review_hints != 1 }}{% endif %}</a>{% endif %}
-    <button class="danger" type="button" onclick="document.getElementById('del-job').showModal()">🗑 Löschen</button>
-    <dialog id="del-job">
-      <form method="post" action="/jobs/{{ job.id }}/delete">
-        <p><strong>{{ job.file_name }}</strong></p>
-        <p>Das Hörbuch und alle Daten dieses Jobs werden gelöscht.</p>
-        <p class="actions">
-          <button class="danger" type="submit">Löschen</button>
-          <button type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
-        </p>
-      </form>
-    </dialog>
     <a href="/">⏪ Zurück</a>
+    {% if not running %}
+    <span class="far-right">
+      <button class="danger" type="button" onclick="document.getElementById('del-job').showModal()">🗑 Löschen</button>
+      <dialog id="del-job">
+        <form method="post" action="/jobs/{{ job.id }}/delete">
+          <p><strong>{{ job.file_name }}</strong></p>
+          <p>Das Hörbuch und alle Daten dieses Jobs werden gelöscht.</p>
+          <p class="actions">
+            <button class="danger" type="submit">Löschen</button>
+            <button type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+          </p>
+        </form>
+      </dialog>
+    </span>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

@@ -158,6 +158,28 @@ def estimate_audio_seconds(document: Document, words_per_minute: int = 130) -> i
     return int(words / words_per_minute * 60)
 
 
+def quick_summary(document: Document, max_items: int = 6) -> str:
+    """Deterministic summary from top-level headings and their first paragraphs."""
+    parts: list[str] = []
+    heading = ""
+    for block in document.blocks:
+        if block.type == "heading" and (block.level or 1) == 1:
+            if heading and len(parts) < max_items:
+                parts.append(heading)
+            heading = block.text.strip()
+        elif heading and block.type == "paragraph" and block.text.strip():
+            snippet = block.text.strip()
+            if len(snippet) > 120:
+                snippet = snippet[:117].rstrip() + "…"
+            parts.append(f"{heading}: {snippet}")
+            heading = ""
+            if len(parts) >= max_items:
+                break
+    if heading and len(parts) < max_items:
+        parts.append(heading)
+    return " ".join(parts)
+
+
 def build_doc_map(
     document: Document, summary: str = "", topics: list[str] | None = None
 ) -> dict[str, Any]:

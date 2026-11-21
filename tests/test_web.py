@@ -143,7 +143,7 @@ def test_upload_runs_job_and_shows_done(app_parts) -> None:
     assert jobs[0].audio_seconds == 42
     page = client.get(location)
     assert page.status_code == 200
-    assert "badge-done" in page.text
+    assert "Gesamt 100 %" in page.text  # badge replaced by one honest bar
     assert "book.mp3" in page.text
 
 
@@ -666,6 +666,33 @@ def test_job_page_summary_card_from_doc_map(app_parts) -> None:
     assert "Zusammenfassung" in page.text
     assert "1 h 10 min" in page.text
     assert "Technik" in page.text
+
+
+def test_delete_button_hidden_while_running(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    assert "🗑 Löschen" in client.get(location).text  # finished: delete offered
+    job = index.get(job_id)
+    job.status = "speaking"
+    index.update(job)
+    page = client.get(location)
+    assert "🗑 Löschen" not in page.text  # running: no delete in the way
+    assert "Abbrechen" in page.text
+
+
+def test_summary_card_shows_placeholders_while_building(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    doc_map = index.jobs_dir / job_id / "02_plan" / "doc_map.json"
+    doc_map.parent.mkdir(parents=True, exist_ok=True)
+    doc_map.write_text('{"language": "de"}', encoding="utf-8")
+    page = client.get(location)
+    assert page.text.count("Wird erstellt …") == 2  # summary and topics
+    assert "Geschätzte Länge" not in page.text
 
 
 def test_result_card_lists_only_existing_files(app_parts) -> None:

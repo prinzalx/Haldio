@@ -49,23 +49,19 @@
     <li class="jobrow">
       <div class="jobmain">
         <a class="jobtitle" href="/jobs/{{ job.id }}">{{ job.title or job.file_name }}</a>
-        <p class="muted">{{ job.file_name }}
-          · {{ job.page_count or "?" }} Seiten
-          · {% if job.audio_seconds %}{{ job.audio_seconds | seconds }}{% else %}— Audio{% endif %}
-          · {{ job.created_at | date }}</p>
+        <p class="meta small muted">
+          {%- if job.title and job.title != job.file_name %}{{ job.file_name }} · {% endif %}
+          {%- if job.page_count %}{{ job.page_count }} Seiten · {% endif %}
+          {%- if job.audio_seconds %}{{ job.audio_seconds | seconds }} · {% endif %}
+          {{ job.created_at | date }}</p>
       </div>
-      <div class="jobstate">
+      <div class="jobside">
         <span class="badge badge-{{ job.status }}">{{ lbl.icon }} {{ lbl.label }}</span>
-        <progress value="{{ job.progress }}" max="100"></progress>
-        <span class="muted">{{ job.progress }}%</span>
-      </div>
-      <div class="actions">
+        <progress class="thin" value="{{ job.progress }}" max="100"></progress>
+        <span class="muted small">{{ job.progress }} %</span>
         <a href="/jobs/{{ job.id }}">Öffnen</a>
-        {% if job.status == "done" %}
-        <a href="/jobs/{{ job.id }}/download/book.mp3">Herunterladen</a>
-        {% endif %}
         <button class="danger" type="button"
-                onclick="document.getElementById('del-{{ job.id }}').showModal()">🗑 Löschen</button>
+                onclick="document.getElementById('del-{{ job.id }}').showModal()">Löschen</button>
         <dialog id="del-{{ job.id }}">
           <form method="post" action="/jobs/{{ job.id }}/delete">
             <p><strong>{{ job.file_name }}</strong></p>

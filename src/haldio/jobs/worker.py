@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import traceback
@@ -39,7 +40,20 @@ _ITEM_WORDS = {
 # note markers that describe a real (measured) item; cache hits and silent
 # failures are excluded from the speed average
 _REAL_MARKERS = ("", "ok", "synth")
+# the extracting summary note ("12 Seiten gelesen") carries the page count
+_PAGES_RE = re.compile(r"(\d+) Seiten")
 _CONSOLE = logging.getLogger("haldio.worker")
+
+
+def _fallback_title(meta: dict[str, Any], file_name: str) -> str:
+    """PDF without metadata title: first top-level heading, else filename stem."""
+    for chapter in meta.get("chapters") or []:
+        if int(chapter.get("level", 1)) != 1:
+            continue
+        title = str(chapter.get("title", "")).strip()
+        if title:
+            return title
+    return Path(file_name).stem
 
 
 class _Cancelled(Exception):
@@ -262,6 +276,11 @@ class Worker:
                 self._log(job, f"{_STAGE_LABELS.get(stage, stage)}: {body}", level)
             else:
                 detail = extra or _STAGE_LABELS.get(stage, stage)
+                if stage == "extracting":
+                    # _parse_note moved the leading number out of extra
+                    found = _PAGES_RE.search(note)
+                    if found:
+                        job.page_count = int(found.group(1))
                 emit("running", stage, detail, None, 0, 0)
             job.message = detail
             self.index.update(job)
@@ -357,6 +376,8 @@ class Worker:
                 job.title = str(meta["title"])
             if meta.get("page_count"):
                 job.page_count = int(meta["page_count"])
+            if not job.title:
+                job.title = _fallback_title(meta, job.file_name)
             if result.speak.synthesized or result.speak.cached:
                 summary = (
                     f"{result.speak.synthesized} Einheiten neu gesprochen, "

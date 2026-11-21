@@ -7,7 +7,12 @@ import pytest
 from haldio.extract.model import Block, CrossReference, Document
 from haldio.pipeline.chunk import make_chunks
 from haldio.pipeline.editor_output import EditorResult, SpokenBlock
-from haldio.pipeline.plan import build_chapter_tree, build_doc_map, find_protected_terms
+from haldio.pipeline.plan import (
+    build_chapter_tree,
+    build_doc_map,
+    find_protected_terms,
+    quick_summary,
+)
 from haldio.pipeline.verify import verify_chunk
 
 
@@ -58,6 +63,21 @@ def test_doc_map_reference_index() -> None:
     assert doc_map["protected_terms"]
 
 
+def test_quick_summary_uses_headings_with_first_paragraphs() -> None:
+    assert quick_summary(_doc()) == "Kapitel Eins: Der CamelCaseWert und USB2 werden benutzt."
+    long_doc = Document(
+        title="T",
+        author="",
+        page_count=1,
+        language="de",
+        blocks=[
+            Block(id="h", type="heading", text="Kapitel", page=1, level=1),
+            Block(id="p", type="paragraph", text="x" * 200, page=1),
+        ],
+    )
+    assert quick_summary(long_doc) == "Kapitel: " + "x" * 117 + "…"
+
+
 def test_verify_flags_missing_protected_term() -> None:
     result = EditorResult(blocks=[SpokenBlock(kind="paragraph", text="ein wert wird benutzt")])
     source = [{"text": "Der CamelCaseWert wird benutzt."}]
@@ -81,7 +101,7 @@ def test_verify_clean_text_has_only_soft_issues() -> None:
     assert not any(i.is_error for i in issues)
 
 
-def test_run_script_end_to_end(tmp_path) -> None:
+def test_run_script_end_to_end(tmp_path, monkeypatch) -> None:
     """Full S1..S7 with a fake LLM that echoes faithful JSON."""
     import json
 
@@ -91,6 +111,8 @@ def test_run_script_end_to_end(tmp_path) -> None:
     from haldio.llm.client import LlmClient
     from haldio.pipeline.run import run_script
     from synthetic import make_test_pdf
+
+    monkeypatch.setattr("haldio.pipeline.run.quick_summary", lambda doc: "KURZGEHALTEN")
 
     def handler(request: httpx.Request) -> httpx.Response:
         payload = {
@@ -111,6 +133,10 @@ def test_run_script_end_to_end(tmp_path) -> None:
     result = run_script(pdf, config, tmp_path / "job", client_factory=factory)
     assert result.return_code == 0
     assert result.chunks >= 1
+    doc_map = json.loads(
+        (tmp_path / "job" / "02_plan" / "doc_map.json").read_text(encoding="utf-8")
+    )
+    assert doc_map["summary"] == "KURZGEHALTEN"  # empty plan summary gets quick_summary
     script = tmp_path / "job" / "04_script" / "script.md"
     assert script.is_file()
     assert "Gesprochener Text" in script.read_text(encoding="utf-8")

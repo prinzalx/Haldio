@@ -52,6 +52,35 @@ def test_event_log_has_timestamp_level_and_label(tmp_path) -> None:
     assert "Hörtext schreiben: Abschnitt 1/2" in disk
 
 
+def test_page_count_saved_during_extract_and_title_fallback(tmp_path) -> None:
+    """page_count lands at Einlesen time; a PDF without title gets the file stem."""
+    index = JobIndex(tmp_path / "data")
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        if progress:
+            progress("extracting", 7, "12 Seiten gelesen #summary")
+        return _fake_result(out_dir)
+
+    job = index.create("book.pdf")
+    _inline_worker(index, run_fn).enqueue(job.id)
+    stored = index.get(job.id)
+    assert stored.page_count == 12
+    assert stored.title == "book"
+
+
+def test_title_falls_back_to_first_heading(tmp_path) -> None:
+    index = JobIndex(tmp_path / "data")
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        result = _fake_result(out_dir)
+        result.script.doc_meta = {"chapters": [{"title": "Kapitel Eins"}]}
+        return result
+
+    job = index.create("book.pdf")
+    _inline_worker(index, run_fn).enqueue(job.id)
+    assert index.get(job.id).title == "Kapitel Eins"
+
+
 def test_status_block_and_log_show_the_same_event(tmp_path) -> None:
     """The activity record and the log line come from one progress event."""
 
