@@ -34,6 +34,9 @@
 <section class="card">
   <h2>🔊 Sprecher (TTS)</h2>
   <p class="muted small">Neun Stimmen des Modells. Eine Hörprobe startet den TTS-Server — vorher das LLM entladen.</p>
+  <label for="f-probe-text">Testtext für die Hörprobe</label>
+  <input id="f-probe-text" size="48" placeholder="Guten Tag. Dies ist eine Hörprobe.">
+  <p class="muted small">Leer lassen für den Standardsatz in der gewählten Sprache.</p>
   <div class="voicelist">
     {% for s in speakers %}
     <p class="voicerow">
@@ -42,7 +45,8 @@
       {% if s.sample %}
       <audio controls preload="none" src="/samples/{{ s.id }}.wav"></audio>
       {% else %}
-      <button type="button" hx-post="/settings/sample" hx-vals='{"voice": "{{ s.id }}"}'
+      <button type="button" hx-post="/settings/sample"
+              hx-vals='js:{voice: "{{ s.id }}", text: document.getElementById("f-probe-text").value, language: document.getElementById("f-lang").value}'
               hx-target="#probe-{{ s.id }}" hx-indicator="#probe-spin-{{ s.id }}">Hörprobe erzeugen</button>
       <span id="probe-spin-{{ s.id }}" class="htmx-indicator">⏳</span>
       <span id="probe-{{ s.id }}" class="test-result"></span>

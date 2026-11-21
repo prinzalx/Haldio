@@ -152,9 +152,15 @@
     const info = document.getElementById("file-info");
     if (!input || !info) return;
     const show = () => {
-      const f = input.files[0];
-      info.textContent = f ? f.name + " (" + Math.round(f.size / 1024) + " kB)"
-                           : "PDF hierher ziehen oder Datei wählen";
+      const files = input.files;
+      if (files.length === 1) {
+        info.textContent = files[0].name + " (" + Math.round(files[0].size / 1024) + " kB)";
+      } else if (files.length > 1) {
+        const total = Array.from(files).reduce((sum, f) => sum + f.size, 0);
+        info.textContent = files.length + " Dateien (" + Math.round(total / 1024) + " kB)";
+      } else {
+        info.textContent = "PDFs hierher ziehen oder Dateien wählen";
+      }
     };
     input.addEventListener("change", show);
     const zone = document.getElementById("dropzone");

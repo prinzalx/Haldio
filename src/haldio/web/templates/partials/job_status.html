@@ -72,11 +72,13 @@
     </form>
   </div>
   {% endif %}
-  {% if job.status == "waiting_for_user" %}
+  {% set hint = act.detail or job.message %}
+  {% if job.status == "waiting_for_user" and ("Weiter" in hint or "Erneut prüfen" in hint) %}
+  {# the button only appears when it is needed: manual mode or after the 300 s ask #}
   <form method="post" action="/jobs/{{ job.id }}/continue" data-toast="Weiter geht’s"
         hx-post="/jobs/{{ job.id }}/continue" hx-target="#job-status" hx-swap="outerHTML">
     <button type="submit" data-busy>
-      {{ "Weiter" if "Weiter" in (act.detail or job.message) else "Erneut prüfen" }}</button>
+      {{ "Weiter" if "Weiter" in hint else "Erneut prüfen" }}</button>
   </form>
   {% endif %}
   {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}

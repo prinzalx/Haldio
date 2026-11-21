@@ -18,18 +18,13 @@ from haldio.llm.client import loaded_llm_models
 from haldio.pipeline.run import BookResult, run_book, run_speech
 from haldio.settings_store import effective_config
 from haldio.tts.base import ModelGuardError
+from haldio.web.labels import STAGES
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
 _LOG_TAIL = 200
-_STAGE_LABELS = {
-    "extracting": "Einlesen",
-    "planning": "Planen",
-    "editing": "Hörtext schreiben",
-    "verifying": "Kontrollieren",
-    "script": "Skript erstellen",
-    "speaking": "Vorlesen",
-    "mastering": "Audio fertigstellen",
-}
+# the stage names come from the ONE label table (haldio.web.labels), so the
+# worker log lines and the UI stepper can never drift apart
+_STAGE_LABELS = dict(STAGES)
 # word used to count per-item progress in each stage
 _ITEM_WORDS = {
     "editing": "Abschnitt",

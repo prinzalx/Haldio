@@ -140,6 +140,63 @@ def test_library_lists_empty(app_parts) -> None:
     assert "Bücherei" in page.text
 
 
+def test_upload_batch_creates_one_job_per_pdf(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post(
+        "/upload",
+        files=[
+            ("file", ("a.pdf", b"%PDF-1.4 erste datei", "application/pdf")),
+            ("file", ("b.pdf", b"%PDF-1.4 zweite datei", "application/pdf")),
+            ("file", ("c.pdf", b"%PDF-1.4 dritte datei", "application/pdf")),
+        ],
+        data={"language": "de"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"  # the stack is watched in the library
+    jobs = index.list()
+    assert len(jobs) == 3
+    assert {j.file_name for j in jobs} == {"a.pdf", "b.pdf", "c.pdf"}
+    assert all(j.language == "de" for j in jobs)
+    # the queue serializes the batch; the fake worker runs all three to done
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not all(j.status == "done" for j in index.list()):
+        time.sleep(0.02)
+    assert all(j.status == "done" for j in index.list())
+    page = client.get("/").text
+    assert "a.pdf" in page and "b.pdf" in page and "c.pdf" in page
+
+
+def test_upload_batch_rejects_when_one_file_is_no_pdf(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    response = client.post(
+        "/upload",
+        files=[
+            ("file", ("a.pdf", b"%PDF-1.4 erste datei", "application/pdf")),
+            ("file", ("notes.txt", b"hello", "text/plain")),
+        ],
+    )
+    assert response.status_code == 400
+
+
+def test_gate_button_offered_only_after_the_ask(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    job = index.create("a.pdf")
+    job.status = "waiting_for_user"
+    job.message = "LM Studio lädt noch: bubo · ich prüfe alle 5 Sekunden"
+    index.update(job)
+    page = client.get(f"/jobs/{job.id}").text
+    assert 'data-toast="Weiter geht' not in page  # no button during the auto phase
+    job.message = "LM Studio lädt noch: bubo · bitte „Erneut prüfen“ drücken"
+    index.update(job)
+    page = client.get(f"/jobs/{job.id}").text
+    assert 'data-toast="Weiter geht' in page
+    assert "Erneut prüfen</button>" in page
+
+
 def test_upload_runs_job_and_shows_done(app_parts) -> None:
     app, index, calls = app_parts
     client = TestClient(app)
@@ -882,7 +939,8 @@ def test_settings_speaker_card_lists_nine_speakers(app_parts) -> None:
     page = client.get("/settings").text
     assert "Sprecher (TTS)" in page
     assert page.count('name="tts.speaker"') == 9  # nine radio rows
-    assert "Hauptsprache Chinesisch; Deutsch klingt unverändert" in page
+    assert "Hauptsprache" not in page  # names only, no description text
+    assert "Dylan" in page
     row = page.split('value="dylan"', 1)[1][:30]
     assert "checked" in row  # the chosen speaker is marked
     assert "Hörprobe erzeugen" in page
@@ -914,6 +972,46 @@ def test_settings_sample_guard_stops(app_parts, monkeypatch) -> None:
     client = TestClient(app)
     page = client.post("/settings/sample", data={"voice": "vivian"}).text
     assert "Gestoppt" in page and "result-warn" in page
+
+
+class _ProbeBackend:
+    """Records the text and language of each synthesize call."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def synthesize(self, text: str, language: str, params: object) -> object:
+        from haldio.tts.base import AudioResult
+
+        self.calls.append((text, language))
+        return AudioResult(data=b"RIFFfake", duration_seconds=0.5)
+
+    def close(self) -> None:
+        pass
+
+
+def test_settings_sample_uses_the_test_text(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    backend = _ProbeBackend()
+    monkeypatch.setattr("haldio.tts.create_backend", lambda *a, **k: backend, raising=True)
+    client = TestClient(app)
+    response = client.post(
+        "/settings/sample",
+        data={"voice": "dylan", "text": "  Sondertext   zum Ausprobieren ", "language": "en"},
+    )
+    assert response.status_code == 200
+    assert backend.calls == [("Sondertext zum Ausprobieren", "en")]
+
+
+def test_settings_sample_language_falls_back_to_default_text(app_parts, monkeypatch) -> None:
+    app, _index, _calls = app_parts
+    backend = _ProbeBackend()
+    monkeypatch.setattr("haldio.tts.create_backend", lambda *a, **k: backend, raising=True)
+    client = TestClient(app)
+    client.post("/settings/sample", data={"voice": "dylan", "language": "en"})
+    client.post("/settings/sample", data={"voice": "vivian", "language": "auto"})
+    assert backend.calls[0][0].startswith("Hello")  # English default for language=en
+    assert backend.calls[1] == ("Guten Tag. Dies ist eine Hörprobe.", "auto")
 
 
 def test_settings_test_tts_guard_stops(app_parts, monkeypatch) -> None:

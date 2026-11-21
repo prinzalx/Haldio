@@ -1,35 +1,30 @@
-"""The nine named speakers of the Qwen3-TTS CustomVoice model, German UI text.
+"""The nine named speakers of the Qwen3-TTS CustomVoice model.
 
-Ids and dialects come from the qwentts.cpp README; the character notes are
-the Qwen3-TTS README descriptions in simple German. The German note reminds
-that the dialects only color Chinese speech, never German.
+Ids come from the qwentts.cpp README. Only the plain names are shown in the
+UI - the owner asked for no description text.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-GERMAN_NOTE = "Deutsch klingt unverändert"
-
 
 @dataclass(frozen=True)
 class SpeakerInfo:
     id: str
     label: str
-    description: str
-    language: str
 
 
 SPEAKERS: tuple[SpeakerInfo, ...,] = (
-    SpeakerInfo("serena", "Serena", "sanfte junge Frau", "Chinesisch"),
-    SpeakerInfo("vivian", "Vivian", "klare, helle junge Stimme", "Chinesisch"),
-    SpeakerInfo("uncle_fu", "Onkel Fu", "tiefe, ruhige Stimme", "Chinesisch"),
-    SpeakerInfo("ryan", "Ryan", "engagiert und voll vorgetragen", "Englisch"),
-    SpeakerInfo("aiden", "Aiden", "klare, süße Stimme", "Englisch"),
-    SpeakerInfo("ono_anna", "Ono Anna", "energisches Mädchen", "Japanisch"),
-    SpeakerInfo("sohee", "Sohee", "herzenswarme jüngere Schwester", "Koreanisch"),
-    SpeakerInfo("eric", "Eric", "stadtischer Onkel aus Sichuan", "Sichuan"),
-    SpeakerInfo("dylan", "Dylan", "schlauer Junge aus Peking", "Peking"),
+    SpeakerInfo("serena", "Serena"),
+    SpeakerInfo("vivian", "Vivian"),
+    SpeakerInfo("uncle_fu", "Onkel Fu"),
+    SpeakerInfo("ryan", "Ryan"),
+    SpeakerInfo("aiden", "Aiden"),
+    SpeakerInfo("ono_anna", "Ono Anna"),
+    SpeakerInfo("sohee", "Sohee"),
+    SpeakerInfo("eric", "Eric"),
+    SpeakerInfo("dylan", "Dylan"),
 )
 
 
@@ -39,7 +34,7 @@ def speaker_rows(selected: str) -> list[dict[str, object]]:
         {
             "id": s.id,
             "label": s.label,
-            "text": f"{s.label} – {s.description} (Hauptsprache {s.language}; {GERMAN_NOTE})",
+            "text": s.label,
             "selected": s.id == selected,
         }
         for s in SPEAKERS

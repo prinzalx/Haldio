@@ -89,28 +89,41 @@ def create_app(
 
     @app.post("/upload")
     async def upload(
-        file: UploadFile = File(...),  # noqa: B008 - FastAPI pattern
+        file: list[UploadFile] = File(...),  # noqa: B008 - FastAPI pattern
         voice: str = Form("dylan"),
         language: str = Form("auto"),
         review: bool = Form(False),
     ) -> RedirectResponse:
-        name = file.filename or "upload.pdf"
-        if not name.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Nur PDF-Dateien sind erlaubt.")
+        """Stapel-Upload: one job per PDF, all run through the queue in order."""
+        if not file:
+            raise HTTPException(status_code=400, detail="Keine Datei gewählt.")
         limit = config.server.max_upload_mb * 1024 * 1024
-        data = await _read_limited(file, limit)
-        if not data.startswith(b"%PDF-"):
-            raise HTTPException(status_code=400, detail="Datei ist kein PDF (Magic Bytes).")
+        # read and validate ALL files first, so a bad one cannot leave half a batch
+        payloads = []
+        for one in file:
+            name = one.filename or "upload.pdf"
+            if not name.lower().endswith(".pdf"):
+                raise HTTPException(status_code=400, detail="Nur PDF-Dateien sind erlaubt.")
+            data = await _read_limited(one, limit)
+            if not data.startswith(b"%PDF-"):
+                raise HTTPException(status_code=400, detail="Datei ist kein PDF (Magic Bytes).")
+            payloads.append((name, data))
         options = {"voice": voice, "language": language, "review": review}
-        job = app.state.index.create(name, options=options)
-        if language in ("de", "en"):
-            job.language = language
-            app.state.index.update(job)
-        folder = app.state.index.jobs_dir / job.id
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "source.pdf").write_bytes(data)
-        app.state.worker.enqueue(job.id)
-        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+        created = []
+        for name, data in payloads:
+            job = app.state.index.create(name, options=dict(options))
+            if language in ("de", "en"):
+                job.language = language
+                app.state.index.update(job)
+            folder = app.state.index.jobs_dir / job.id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "source.pdf").write_bytes(data)
+            created.append(job)
+        for job in created:
+            app.state.worker.enqueue(job.id)
+        if len(created) == 1:
+            return RedirectResponse(f"/jobs/{created[0].id}", status_code=303)
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     def job_page(request: Request, job_id: str) -> HTMLResponse:
@@ -462,17 +475,25 @@ def create_app(
         return FileResponse(path, media_type="audio/wav")
 
     @app.post("/settings/sample", response_class=HTMLResponse)
-    def make_sample(voice: str = Form(...)) -> HTMLResponse:
+    def make_sample(
+        voice: str = Form(...),  # noqa: B008 - FastAPI pattern
+        text: str = Form(""),
+        language: str = Form("auto"),
+    ) -> HTMLResponse:
         """Hörprobe für eine Stimme; startet den TTS-Server durch den Modell-Guard."""
         from haldio.tts import create_backend
         from haldio.tts.base import TTSParams
 
         if not _SAFE_VOICE.fullmatch(voice):
             raise HTTPException(status_code=404)
+        lang = language if language in ("de", "en") else "auto"
+        probe = " ".join(text.split())[:200]
+        if not probe:
+            probe = _PROBE_TEXTS["en" if lang == "en" else "de"]
         backend = None
         try:
             backend = create_backend(effective_config(config).tts)
-            audio = backend.synthesize(_SAMPLE_TEXT, "de", TTSParams(voice=voice))
+            audio = backend.synthesize(probe, lang, TTSParams(voice=voice))
             out = _sample_dir(config) / f"{voice}.wav"
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(audio.data)
@@ -553,7 +574,11 @@ def _form_from_config(cfg: Config) -> dict[str, str]:
 
 
 _SAFE_VOICE = re.compile(r"[A-Za-z0-9_.-]{1,40}")
-_SAMPLE_TEXT = "Guten Tag. Dies ist eine Hörprobe."
+# default probe texts per language (used when the test-text field is empty)
+_PROBE_TEXTS = {
+    "de": "Guten Tag. Dies ist eine Hörprobe.",
+    "en": "Hello. This is a voice sample.",
+}
 
 
 def _secs(ms: int) -> str:
