@@ -6,6 +6,13 @@
   <p class="muted">{{ job.file_name }} · hochgeladen {{ job.created_at | date }}
      · {{ job.page_count or "?" }} Seiten</p>
   {% include "partials/job_status.html" %}
+  <details class="stage-help">
+    <summary>Was bedeuten die Schritte?</summary>
+    <table class="stage-help">
+      <tr><th>Schritt</th><th>Was passiert dort?</th></tr>
+      {% for row in stage_help %}<tr><td>{{ row.label }}</td><td>{{ row.desc }}</td></tr>{% endfor %}
+    </table>
+  </details>
   {% include "partials/logtail.html" %}
   <div class="actions">
     {% if has_script %}<a href="/jobs/{{ job.id }}/review">📝 Skript prüfen (optional)

@@ -6,7 +6,7 @@
      {% endif %}>
   <ol class="stepper">
     {% for row in stepper %}
-    <li class="step step-{{ row.state }}">
+    <li class="step step-{{ row.state }}" title="{{ row.tip }}">
       <span class="step-icon" aria-hidden="true">{{ row.icon }}</span>
       {{ row.label }}
       <span class="step-state">({{ row.word }})</span>
@@ -15,28 +15,40 @@
   </ol>
   <p>
     <span class="badge badge-{{ job.status }}">{{ status.icon }} {{ status.label }}</span>
-    <progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%
+    <progress value="{{ job.progress }}" max="100"></progress> Gesamt {{ job.progress }} %
   </p>
   {% set act = job.activity %}
-  {% if act.state %}
-  <p class="activity">
-    {% if act.state == "running" %}
-    <span class="spinner" aria-hidden="true"></span>
-    <span>{{ act.detail }}</span>
-    {% elif act.state == "waiting" %}
-    <span class="pause">⏸ Pause – es läuft nichts</span>
-    {% else %}
-    <span>{{ act.detail }}</span>
+  {% set rowset = stepper | selectattr("state", "eq", "current") | list %}
+  {% if not rowset %}{% set rowset = stepper | selectattr("state", "eq", "waiting") | list %}{% endif %}
+  {% if not rowset %}{% set rowset = stepper | selectattr("state", "eq", "failed") | list %}{% endif %}
+  {% if rowset or act.state %}
+  <div class="gerade">
+    {% if rowset %}
+    <p class="gerade-title">👉 Gerade: {{ rowset[0].label }}</p>
+    <p class="muted small">{{ rowset[0].tip }}</p>
     {% endif %}
-  </p>
-  {% if act.state == "waiting" and act.detail %}<p class="muted">{{ act.detail }}</p>{% endif %}
-  {% if activity_age is not none %}
-  <p class="muted small">zuletzt aktiv vor {{ activity_age }} s</p>
+    {% if act.state %}
+    <p class="activity">
+      {% if act.state == "running" %}
+      <span class="spinner" aria-hidden="true"></span>
+      <span>{{ act.detail }}</span>
+      {% elif act.state == "waiting" %}
+      <span class="pause">⏸ Pause – es läuft nichts</span>
+      {% else %}
+      <span>{{ act.detail }}</span>
+      {% endif %}
+    </p>
+    {% if act.state == "waiting" and act.detail %}<p class="muted">{{ act.detail }}</p>{% endif %}
+    {% endif %}
+    {% if activity_age is not none %}
+    <p class="muted small">zuletzt aktiv vor {{ activity_age }} s</p>
+    {% endif %}
+    {% if activity_stale %}
+    <p class="warn-text">⚠ Keine Aktivität seit {{ activity_age }} s</p>
+    {% endif %}
+  </div>
   {% endif %}
-  {% if activity_stale %}
-  <p class="warn-text">⚠ Keine Aktivität seit {{ activity_age }} s</p>
-  {% endif %}
-  {% elif job.message %}
+  {% if not act.state and job.message %}
   <p class="muted">{{ job.message }}</p>
   {% endif %}
   {% if job.status in ('awaiting_tts', 'waiting_for_user') or job.status == 'speaking' %}

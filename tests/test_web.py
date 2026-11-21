@@ -155,7 +155,7 @@ def test_job_api_exposes_logs(app_parts) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "logs" in body
-    assert any("Redigieren: Abschnitt 1/2" in line for line in body["logs"])
+    assert any("Hörtext schreiben: Abschnitt 1/2" in line for line in body["logs"])
 
 
 def test_job_page_shows_log_tail(app_parts) -> None:
@@ -269,7 +269,7 @@ def test_failure_message_is_short_and_detail_holds_traceback(tmp_path) -> None:
     worker.enqueue(job.id)
     done = index.get(job.id)
     assert done.status == "failed"
-    assert done.message == "Sprachausgabe fehlgeschlagen."
+    assert done.message == "Vorlesen fehlgeschlagen."
     assert "Traceback" in done.error_detail
     assert "empty audio" in done.error
 
@@ -291,11 +291,17 @@ def _wait_for_status(index: JobIndex, job_id: str, wanted: str, timeout: float =
     import time
 
     for _ in range(int(timeout / 0.05)):
-        status = index.get(job_id).status
+        try:
+            status = index.get(job_id).status
+        except ValueError:
+            status = ""  # job.json was mid-write when polled
         if status == wanted:
             return status
         time.sleep(0.05)
-    return index.get(job_id).status
+    try:
+        return index.get(job_id).status
+    except ValueError:
+        return ""
 
 
 def test_gate_blocks_until_continue(tmp_path, monkeypatch) -> None:
@@ -642,7 +648,7 @@ def test_job_page_shows_german_label_and_stepper(app_parts) -> None:
     page = client.get(location)
     assert "Fertig" in page.text
     assert "stepper" in page.text
-    assert "Mastern" in page.text
+    assert "Audio fertigstellen" in page.text
 
 
 def test_job_page_summary_card_from_doc_map(app_parts) -> None:
@@ -886,7 +892,7 @@ def test_log_download_is_plain_text(app_parts) -> None:
     location = _upload_pdf(client)
     response = client.get(f"{location}/log.txt")
     assert response.status_code == 200
-    assert "Redigieren: gestartet" in response.text
+    assert "Hörtext schreiben: gestartet" in response.text
 
 
 def test_status_block_renders_activity_detail(app_parts) -> None:

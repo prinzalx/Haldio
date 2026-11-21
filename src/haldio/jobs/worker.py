@@ -23,11 +23,11 @@ _LOG_TAIL = 200
 _STAGE_LABELS = {
     "extracting": "Einlesen",
     "planning": "Planen",
-    "editing": "Redigieren",
-    "verifying": "Prüfen",
-    "script": "Skript",
-    "speaking": "Sprachausgabe",
-    "mastering": "Mastern",
+    "editing": "Hörtext schreiben",
+    "verifying": "Kontrollieren",
+    "script": "Skript erstellen",
+    "speaking": "Vorlesen",
+    "mastering": "Audio fertigstellen",
 }
 # word used to count per-item progress in each stage
 _ITEM_WORDS = {

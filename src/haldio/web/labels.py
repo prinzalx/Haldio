@@ -15,14 +15,14 @@ STATUS_LABELS: dict[str, dict[str, str]] = {
     "queued": {"label": "Wartet", "icon": "⏳", "cls": "wait"},
     "extracting": {"label": "Einlesen", "icon": "📖", "cls": "run"},
     "planning": {"label": "Planen", "icon": "🗂", "cls": "run"},
-    "editing": {"label": "Redigieren", "icon": "✍", "cls": "run"},
-    "verifying": {"label": "Prüfen", "icon": "🔍", "cls": "run"},
-    "script": {"label": "Skript", "icon": "📝", "cls": "run"},
+    "editing": {"label": "Hörtext schreiben", "icon": "✍", "cls": "run"},
+    "verifying": {"label": "Kontrollieren", "icon": "🔍", "cls": "run"},
+    "script": {"label": "Skript erstellen", "icon": "📝", "cls": "run"},
     "awaiting_review": {"label": "Skript prüfen", "icon": "📝", "cls": "note"},
     "awaiting_tts": {"label": "Bereit für Sprachausgabe", "icon": "🔊", "cls": "note"},
     "waiting_for_user": {"label": "Wartet auf Sie", "icon": "🖐", "cls": "note"},
-    "speaking": {"label": "Sprechen", "icon": "🔊", "cls": "run"},
-    "mastering": {"label": "Mastern", "icon": "🎛", "cls": "run"},
+    "speaking": {"label": "Vorlesen", "icon": "🔊", "cls": "run"},
+    "mastering": {"label": "Audio fertigstellen", "icon": "🎛", "cls": "run"},
     "done": {"label": "Fertig", "icon": "✅", "cls": "ok"},
     "failed": {"label": "Fehlgeschlagen", "icon": "❌", "cls": "bad"},
     "cancelled": {"label": "Abgebrochen", "icon": "⏹", "cls": "stop"},
@@ -32,12 +32,23 @@ STATUS_LABELS: dict[str, dict[str, str]] = {
 STAGES: list[tuple[str, str]] = [
     ("extracting", "Einlesen"),
     ("planning", "Planen"),
-    ("editing", "Redigieren"),
-    ("verifying", "Prüfen"),
-    ("script", "Skript"),
-    ("speaking", "Sprechen"),
-    ("mastering", "Mastern"),
+    ("editing", "Hörtext schreiben"),
+    ("verifying", "Kontrollieren"),
+    ("script", "Skript erstellen"),
+    ("speaking", "Vorlesen"),
+    ("mastering", "Audio fertigstellen"),
 ]
+
+# plain-language explanation of each stage for the "Gerade:" box and the help table
+STAGE_DESCS: dict[str, str] = {
+    "extracting": "Die PDF-Datei wird gelesen und in einzelne Textteile zerlegt.",
+    "planning": "Das Buch wird in Abschnitte aufgeteilt und die Reihenfolge festgelegt.",
+    "editing": "Das Sprachmodell schreibt aus jedem Abschnitt einen Hörtext.",
+    "verifying": "Der Hörtext wird mit dem Original verglichen.",
+    "script": "Alle Hörtexte werden zum kompletten Skript zusammengefügt.",
+    "speaking": "Die Sprachausgabe liest das Skript laut vor.",
+    "mastering": "Aus den Audio-Stücken werden die fertigen Dateien gebaut.",
+}
 
 # stage a job is at when it has this status and no stage hint was stored
 _STATUS_STAGE: dict[str, int] = {
@@ -119,9 +130,15 @@ def stepper_state(job: Job) -> list[dict[str, Any]]:
                 "state": state,
                 "icon": _STATE_ICONS[state],
                 "word": _STATE_WORDS[state],
+                "tip": STAGE_DESCS.get(name, ""),
             }
         )
     return rows
+
+
+def stage_help() -> list[dict[str, str]]:
+    """Rows for the "Was bedeuten die Schritte?" table (label + plain text)."""
+    return [{"label": label, "desc": STAGE_DESCS[name]} for name, label in STAGES]
 
 
 # editor warning codes -> readable German reason (never show the raw code)

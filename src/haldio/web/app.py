@@ -25,7 +25,7 @@ from haldio.pipeline.assemble import render_script_md
 from haldio.pipeline.edit import load_prompt_version, system_with_examples
 from haldio.pipeline.run import edit_chunk_with_retry
 from haldio.tts.base import ModelGuardError
-from haldio.web.labels import status_label, stepper_state, warning_text
+from haldio.web.labels import stage_help, status_label, stepper_state, warning_text
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -456,6 +456,7 @@ def _job_context(index: JobIndex, job_id: str, job: Job, config: Config) -> dict
         "job": job,
         "status": status_label(job.status),
         "stepper": stepper_state(job),
+        "stage_help": stage_help(),
         "files": _job_files(index, job),
         "has_script": _has_script(index, job_id),
         "summary": _load_doc_map(index, job_id),

@@ -308,3 +308,12 @@ became a time-shifted process.
 - Filter: fixed - clear label "Nur Abschnitte mit Hinweis anzeigen"; empty sections are hidden by it too.
 - Job page: fixed - the entry reads "Skript prüfen (optional)" with the hint count ("· 12 Hinweise").
 - Tests: 125 pass - empty-section input + buttons, use_original copies text, counter + German reasons + no raw code, fallback in synthesize_script (on and off).
+
+## Correction 5 - section 4 Plain language
+
+- German label table: fixed - UI renames kept the internal ids: extracting=Einlesen, planning=Planen, editing=Hörtext schreiben, verifying=Kontrollieren, script=Skript erstellen, speaking=Vorlesen, mastering=Audio fertigstellen (status badges, stepper and worker log lines all use the new words).
+- "Gerade:" box: fixed - under the stepper one box shows the current step's label, a plain explanation and the live detail from the activity record.
+- Help table: fixed - <details> "Was bedeuten die Schritte?" with a two-column table (Schritt / was passiert dort) below the stepper.
+- Tooltips: fixed - every stepper chip carries title= with its explanation.
+- Percent: fixed - the bar now reads "Gesamt 32 %" (job total).
+- Tests: 125 pass - existing label assertions updated to the new German words.
