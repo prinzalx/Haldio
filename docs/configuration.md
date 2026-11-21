@@ -10,6 +10,7 @@ The web UI shows readable names only. File paths live here.
 | `data/settings.local.yaml` | Your changes from the settings page. Merged over `config.yaml` when a job starts. "Auf Standard zurücksetzen" deletes it. |
 | `.env` | Secrets, for example the API key. |
 | `data/<job>/` | One folder per job: ingest text, script, audio units, master. |
+| `data/voices.json` | Voice ids read from the last successful TTS check; it feeds the voice lists. Written once by the TTS check, not by the web UI. |
 | `data/samples/<voice>.wav` | Listening samples for the speaker card. |
 
 Changes on the settings page apply to jobs that start **after** the save.

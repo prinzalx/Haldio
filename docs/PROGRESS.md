@@ -401,4 +401,23 @@ became a time-shifted process.
 - Reviewer: implementation-reviewer checked section 9 against correction-6.md; verdict
   accept, the only justified change (this PROGRESS entry + stale-line fix) is applied here.
 
+
+## Correction 6 - §3 Finalization
+
+- README: done - the "Web interface" section now describes the correction 6 state: the
+  streaming live detail ("das Sprachmodell schreibt seit 38 s (etwa 410 Token)"), the
+  worker-timer re-check with the "Erneut prüfen" button after 300 s, the LLM-written plan
+  summary with the deterministic fallback, the review page showing table and list content
+  in the Original column plus "Original übernehmen", the editable Einstellungen page with
+  validation and `data/settings.local.yaml`, and the full screenshot set with the
+  360/768/1280 px width checks.
+- docs/configuration.md: done - the file table now lists `data/voices.json` (the voice
+  list source, written by the TTS check, not by the web UI) next to the samples folder.
+- Open for the owner (§2.5): `data/voices.json` and the per-voice listening samples do
+  not exist yet; one generation run (settings page sample generation / TTS check) fills
+  both. Reported at the final stop.
+- Open for the owner (older reviewer findings, prioritization pending): split app.py
+  (~800 lines), duplicate `_STAGE_LABELS`, gate button label before 300 s, mastering
+  output shown as lowercase "mp3".
+
 Stop - waiting for the owner's OK on the screenshots.

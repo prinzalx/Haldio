@@ -58,26 +58,37 @@ Open http://127.0.0.1:8505 (German user interface).
   A banner counts jobs waiting in the ready2tts pool ("Alle TTS starten").
 - **Job page** — a seven-stage stepper (Einlesen → … → Audio fertigstellen) with state text,
   progress bar ("Gesamt N %") and a "Gerade:" box that explains the current step and shows
-  the live detail from a single activity record; during Vorlesen it counts units
-  ("Einheit 12 von 957") and shows an ETA measured from this run's finished
-  units, never a hard-coded factor. A summary card appears once the plan exists (placeholders
-  read "Wird erstellt …");
+  the live detail from a single activity record; while the editor LLM writes it reports
+  streaming progress ("das Sprachmodell schreibt seit 38 s (etwa 410 Token)"), during
+  Vorlesen it counts units ("Einheit 12 von 957") and shows an ETA measured from this
+  run's finished units, never a hard-coded factor. While a job waits for the LLM to be
+  unloaded the worker re-checks LM Studio every 5 s on its own timer; after 300 s the
+  page offers an "Erneut prüfen" button. A summary card appears once the plan exists —
+  the planning stage asks the LLM for the real summary (a quick deterministic summary is
+  the fallback, marked as such) — and placeholders
+  read "Wird erstellt …";
   a result card offers `<audio controls>` and downloads (MP3, OGG, Skript,
   QA-Bericht, PDF — named after the PDF title) for files that exist.
   Actions follow the state: Abbrechen, Weiter, Neu starten, Skript prüfen,
   Löschen (dialog, far right and hidden while the job runs). The log lives in a collapsed
   `<details>` ("Technische Details").
-- **Skript prüfen** — original text next to the edited script per chunk, chapter
+- **Skript prüfen** — original text next to the edited script per chunk (tables and lists
+  show their real content, long blocks scroll), chapter
   title in the header, readable warnings, save per chunk with HTMX ("Gespeichert"
-  toast) and a "Nur Warnungen anzeigen" filter.
-- **Einstellungen** — read-only config table; "Test LM Studio" and "Test TTS"
+  toast), "Original übernehmen" for empty or broken sections and a
+  "Nur Abschnitte mit Hinweis anzeigen" filter.
+- **Einstellungen** — the full settings page: readable groups with German names, edits
+  are validated (bitrate, pauses…), saving writes `data/settings.local.yaml` ("Auf
+  Standard zurücksetzen" removes it), the LM Studio card lists models and marks the
+  loaded ones, "Test LM Studio" and "Test TTS"
   show a spinner and a clear result next to the button (TTS respects the model
   guard: the LLM must be unloaded first).
 - Light and dark theme (system preference, switchable, remembered). The top bar sticks
   on scroll and marks the current page. No Node.js:
   FastAPI + Jinja2 + a vendored htmx, so the UI works offline.
 
-Screenshots of all four pages in both themes: `docs/screenshots/`
+Screenshots of every page in both themes plus width checks at 360, 768 and 1280 px:
+`docs/screenshots/`
 (`uv run python scripts/screenshots.py` regenerates them from mock data —
 no TTS model is started).
 
