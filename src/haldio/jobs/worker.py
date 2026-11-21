@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import traceback
@@ -17,15 +18,27 @@ from haldio.pipeline.run import BookResult, run_book, run_speech
 from haldio.tts.base import ModelGuardError
 
 _ACTIVE_STATUSES = ("queued", "extracting", "planning", "editing", "speaking", "mastering")
-_LOG_TAIL = 30
+_LOG_TAIL = 200
 _STAGE_LABELS = {
     "extracting": "Einlesen",
     "planning": "Planen",
     "editing": "Redigieren",
     "verifying": "Prüfen",
+    "script": "Skript",
     "speaking": "Sprachausgabe",
     "mastering": "Mastern",
 }
+# word used to count per-item progress in each stage
+_ITEM_WORDS = {
+    "editing": "Abschnitt",
+    "verifying": "Abschnitt",
+    "speaking": "Einheit",
+    "mastering": "Teil",
+}
+# note markers that describe a real (measured) item; cache hits and silent
+# failures are excluded from the speed average
+_REAL_MARKERS = ("", "ok", "synth")
+_CONSOLE = logging.getLogger("haldio.worker")
 
 
 class _Cancelled(Exception):
@@ -42,30 +55,24 @@ def _format_eta(seconds: int) -> str:
     return f"{secs} s"
 
 
-def _stage_message(stage: str, value: int, note: str, speak_state: dict[str, Any]) -> str:
-    """German progress line; during speaking it counts units and measures the ETA.
+def _parse_note(note: str) -> tuple[int, int, str, str]:
+    """Split a pipeline note into (done, total, marker, extra text).
 
-    The ETA uses only the real speed of the units finished in this run; before
-    the second unit there is no estimate and no hard-coded factor is used.
+    Grammar: "<done>/<total> <extra> #<marker>"; marker is one of
+    ok / cache / fail / summary. Extra text is German and goes to the log.
     """
-    if stage == "speaking" and "/" in note:
-        done_text, _, total_text = note.partition("/")
-        try:
-            done, total = int(done_text), int(total_text)
-        except ValueError:
-            return f"{_STAGE_LABELS.get(stage, stage)} {value}%"
-        if done >= 0 and total > 0:
-            message = f"Einheit {done} von {total}"
-            now = time.monotonic()
-            if speak_state["t0"] is None:
-                speak_state["t0"] = now
-                speak_state["first"] = done
-            elapsed = now - float(speak_state["t0"])
-            if done > int(speak_state["first"]) and done < total:
-                per_unit = elapsed / (done - int(speak_state["first"]))
-                message += f" · noch ca. {_format_eta(int((total - done) * per_unit))}"
-            return message
-    return f"{_STAGE_LABELS.get(stage, stage)} {value}%".strip()
+    marker = ""
+    if "#" in note:
+        note, _, marker = note.rpartition("#")
+        marker = marker.strip()
+        note = note.strip()
+    done = total = 0
+    head, _, rest = note.partition(" ")
+    if "/" in head:
+        a, _, b = head.partition("/")
+        if a.isdigit() and b.isdigit():
+            done, total = int(a), int(b)
+    return done, total, marker, rest.strip()
 
 
 class Worker:
@@ -138,13 +145,23 @@ class Worker:
     def _log_lines(self, job_id: str) -> deque[str]:
         return self._job_logs.setdefault(job_id, deque(maxlen=_LOG_TAIL))
 
-    def _log(self, job: Job, line: str) -> None:
+    def _log(self, job: Job, body: str, level: str = "INFO") -> None:
+        """One line per real event: timestamp, level, readable text.
+
+        Repeating the same text is skipped so a polling loop never fills
+        the log with duplicates. Lines go to memory, logs/job.log and the
+        serve console (stdlib logging).
+        """
+        stamp = datetime.now(UTC).strftime("%H:%M:%S")
+        entry = f"{stamp} [{level}] {body}"
+        lines = self._log_lines(job.id)
+        if lines and lines[-1].split("] ", 1)[-1] == body:
+            return
+        lines.append(entry)
+        job.logs = list(lines)
+        _CONSOLE.info(entry)
         try:
-            stamp = datetime.now(UTC).strftime("%H:%M:%S")
-            entry = f"{stamp} {line}"
-            self._log_lines(job.id).append(entry)
-            job.logs = list(self._log_lines(job.id))
-            path = self.index.jobs_dir / job.id / "worker.log"
+            path = self.index.jobs_dir / job.id / "logs" / "job.log"
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(entry + "\n")
@@ -171,16 +188,81 @@ class Worker:
         # re-seed the in-memory tail so a restart keeps the last log lines
         self._job_logs[job_id] = deque(job.logs[-_LOG_TAIL:], maxlen=_LOG_TAIL)
 
-        speak_state: dict[str, Any] = {"t0": None, "first": 0}
+        # per-stage item timing feeds the ETA rule: average of the last 10
+        # real items, shown only after 5 real items (cache hits never count)
+        tracks: dict[str, dict[str, Any]] = {}
+
+        def emit(
+            state: str,
+            stage: str = "",
+            detail: str = "",
+            eta: int | None = None,
+            done: int = 0,
+            total: int = 0,
+        ) -> None:
+            """Write the ONE activity record every UI part reads from."""
+            job.activity = {
+                "state": state,
+                "stage": stage,
+                "done": done,
+                "total": total,
+                "detail": detail,
+                "eta": eta,
+                "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
 
         def progress(stage: str, value: int, note: str = "") -> None:
             if job_id in self._cancelled:
                 raise _Cancelled()
+            done, total, marker, extra = _parse_note(note)
+            if stage != job.status:
+                self._log(job, f"{_STAGE_LABELS.get(stage, stage)}: gestartet")
             job.status = stage
             job.progress = value
             job.options["stage"] = stage
-            job.message = _stage_message(stage, value, note, speak_state)
-            self._log(job, f"{stage} {value}% {note}".strip())
+            track = tracks.setdefault(
+                stage, {"last_done": 0, "last_time": None, "durations": deque(maxlen=10), "real": 0}
+            )
+            now = time.monotonic()
+            level = "INFO"
+            if done and total:
+                delta = None
+                if done > track["last_done"]:
+                    if track["last_time"] is not None:
+                        delta = now - float(track["last_time"])
+                    track["last_done"] = done
+                    track["last_time"] = now
+                    if marker in _REAL_MARKERS and delta is not None:
+                        track["durations"].append(delta)
+                        track["real"] += 1
+                eta: int | None = None
+                if track["real"] >= 5 and track["durations"] and done < total:
+                    avg = sum(track["durations"]) / len(track["durations"])
+                    eta = int((total - done) * avg)
+                word = _ITEM_WORDS.get(stage, "Abschnitt")
+                detail = f"{word} {done} von {total}"
+                if eta is not None:
+                    detail += f" · noch etwa {_format_eta(eta)}"
+                elif stage == "mastering" and extra:
+                    detail += f": {extra}"
+                if marker == "cache":
+                    body = f"{word} {done}/{total} {extra or 'aus dem Zwischenspeicher übernommen'}"
+                elif marker == "fail":
+                    body = f"{word} {done}/{total} {extra or 'fehlgeschlagen, Stille eingesetzt'}"
+                    level = "WARN"
+                elif marker == "summary":
+                    body = extra or detail
+                elif delta is not None:
+                    body = f"{word} {done}/{total} fertig nach {delta:.0f} s"
+                    body = f"{body} {extra}" if extra else body
+                else:
+                    body = f"{word} {done}/{total} {extra}".strip()
+                emit("running", stage, detail, eta, done, total)
+                self._log(job, f"{_STAGE_LABELS.get(stage, stage)}: {body}", level)
+            else:
+                detail = extra or _STAGE_LABELS.get(stage, stage)
+                emit("running", stage, detail, None, 0, 0)
+            job.message = detail
             self.index.update(job)
 
         def gate(note: str) -> None:
@@ -192,7 +274,8 @@ class Worker:
                 self._gates[job_id] = event
             job.status = "waiting_for_user"
             job.message = note
-            self._log(job, f"waiting_for_user: {note}")
+            emit("waiting", str(job.options.get("stage", "")), note)
+            self._log(job, note)
             self.index.update(job)
             while not event.wait(1.0):
                 if job_id in self._cancelled:
@@ -234,15 +317,30 @@ class Worker:
                 job.title = str(meta["title"])
             if meta.get("page_count"):
                 job.page_count = int(meta["page_count"])
+            if result.speak.synthesized or result.speak.cached:
+                summary = (
+                    f"{result.speak.synthesized} Einheiten neu gesprochen, "
+                    f"{result.speak.cached} aus dem Zwischenspeicher"
+                )
+                if result.speak.failed_units:
+                    summary += f", {len(result.speak.failed_units)} fehlgeschlagen"
+                    self._log(job, f"{_STAGE_LABELS['speaking']}: {summary}", "WARN")
+                else:
+                    self._log(job, f"{_STAGE_LABELS['speaking']}: {summary}")
+            if result.master.ok:
+                names = ", ".join(path.name for path in result.master.files)
+                self._log(job, f"{_STAGE_LABELS['mastering']}: geschrieben: {names}")
             if result.review_paused:
                 job.status = "awaiting_review"
                 job.progress = 60
                 job.error = ""
+                emit("waiting", "script", "Skript wartet auf Prüfung")
             elif result.tts_gate:
                 job.status = "awaiting_tts"
                 job.progress = 60
                 job.error = ""
                 job.message = "Bereit für Sprachausgabe"
+                emit("waiting", "speaking", "Bereit für Sprachausgabe")
             else:
                 job.status = "done" if result.return_code == 0 else "failed"
                 job.progress = 100 if result.return_code == 0 else job.progress
@@ -254,16 +352,27 @@ class Worker:
                             f"{len(result.speak.failed_units)} von {len(result.speak.units)} "
                             "Einheiten konnten nicht gesprochen werden (Stille eingesetzt)."
                         )
+                    else:
+                        job.message = "Fertig."
+                    emit("done", "mastering", job.message)
+                else:
+                    failed_stage = str(job.options.get("stage", ""))
+                    job.message = f"{_STAGE_LABELS.get(failed_stage, job.status)} fehlgeschlagen."
+                    emit("failed", failed_stage, job.message)
             self.index.update(job)
         except _Cancelled:
             job.status = "cancelled"
+            job.message = "Abgebrochen."
+            emit("failed", str(job.options.get("stage", "")), job.message)
+            self._log(job, "abgebrochen")
             self.index.update(job)
         except ModelGuardError as error:
             # the model guard blocked the TTS start: the user must unload the LLM
             job.status = "waiting_for_user"
             job.message = "Bitte das LLM in LM Studio entladen, dann Weiter drücken."
             job.error = str(error)
-            self._log(job, f"model guard: {error}")
+            emit("waiting", "speaking", job.message)
+            self._log(job, f"Modell-Sperre: {error}", "WARN")
             self.index.update(job)
         except Exception as error:  # noqa: BLE001 - a job failure must not kill the thread
             stage_label = _STAGE_LABELS.get(job.status, job.status)
@@ -271,6 +380,8 @@ class Worker:
             job.error = str(error)
             job.error_detail = traceback.format_exc(limit=8).strip()
             job.message = f"{stage_label} fehlgeschlagen."
+            emit("failed", str(job.options.get("stage", "")), job.message)
+            self._log(job, f"Fehler: {error}", "ERROR")
             self.index.update(job)
 
 

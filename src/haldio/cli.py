@@ -130,10 +130,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(result.summary())
         return result.return_code
     if args.command == "serve":
+        import logging
+        import sys
+
         import uvicorn
 
         from haldio.web.app import create_app
 
+        # job log lines also appear on the serve console (same text)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        worker_log = logging.getLogger("haldio.worker")
+        worker_log.setLevel(logging.INFO)
+        worker_log.addHandler(handler)
         uvicorn.run(create_app(config), host=config.server.host, port=config.server.port)
         return 0
     if args.command is None:

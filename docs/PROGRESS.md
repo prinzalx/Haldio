@@ -269,3 +269,15 @@ became a time-shifted process.
 - Docs: done - README has a "Web interface" section; playwright added to the dev
   extra.
 - Stop: waiting for the owner's OK on the screenshots before any further web work.
+
+## Correction 5 - section 1 One source for the status
+
+- One activity record: fixed - the worker writes ONE record per job through `emit()` (state, stage, done, total, detail, eta, updated_at) into `job.activity`; stepper hint, status block and message read that record.
+- Per-item detail in every stage: fixed - editing and verifying count "Abschnitt i von n", speaking counts units, mastering reports "Teil 2 von 3: MP3" (make_master gained a progress callback).
+- Time estimate: fixed - ETA only after 5 real items, average of the LAST 10, cache hits and silent units excluded (why "noch ca. 14 min" was too low); wording "noch etwa".
+- Sign of life: fixed - spinner only while running; waiting shows grey "Pause - es laeuft nichts"; "zuletzt aktiv vor N s"; running with no update for 60 s shows "Keine Aktivitaet seit N s".
+- Long LLM requests: open - elapsed-time fallback only; streaming token count ("das Sprachmodell schreibt seit 38 s (etwa 410 Token)") not done.
+- Log = second channel: fixed - box renamed "Technische Details", collapsed, entry counter; one line per real event "HH:MM:SS [LEVEL] Stage: text", no bare stage+percent lines, duplicates logged once; INFO/WARN/ERROR colored; last 200 lines in a scroll box, all lines in `logs/job.log`.
+- Log endpoint: fixed - GET /jobs/<id>/log?after=<n> (JSON, polled only while the box is open) + "Protokoll herunterladen" -> /jobs/<id>/log.txt.
+- Serve console: fixed - worker logs via the `haldio.worker` stdlib logger; `haldio serve` attaches a StreamHandler with the same text.
+- Tests: 115 pass - single-source event, duplicate suppression, 200-line cap, ETA rule with cache exclusion, log endpoint after=, log.txt, activity block.

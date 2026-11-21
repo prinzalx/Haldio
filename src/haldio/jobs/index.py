@@ -18,6 +18,7 @@ STATUS_VALUES = (
     "planning",
     "editing",
     "verifying",
+    "script",
     "awaiting_review",
     "waiting_for_user",
     "speaking",
@@ -49,6 +50,8 @@ class Job:
     error: str = ""
     error_detail: str = ""
     logs: list[str] = field(default_factory=list)
+    # the ONE activity record: state/stage/done/total/detail/eta/updated_at
+    activity: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -66,6 +69,7 @@ class Job:
             "error": self.error,
             "error_detail": self.error_detail,
             "logs": self.logs,
+            "activity": self.activity,
             "options": self.options,
         }
 

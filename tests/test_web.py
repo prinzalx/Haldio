@@ -47,8 +47,8 @@ def app_parts(tmp_path):
     ):
         calls.append(str(pdf_path))
         if progress:
-            progress("editing", 30)
-            progress("speaking", 70)
+            progress("editing", 30, "1/2 #ok")
+            progress("speaking", 70, "12/40 #ok")
         return _fake_result(out_dir)
 
     worker = Worker(index, config, run_fn=run_fn, inline=True)
@@ -155,7 +155,7 @@ def test_job_api_exposes_logs(app_parts) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "logs" in body
-    assert any("editing 30%" in line for line in body["logs"])
+    assert any("Redigieren: Abschnitt 1/2" in line for line in body["logs"])
 
 
 def test_job_page_shows_log_tail(app_parts) -> None:
@@ -163,8 +163,8 @@ def test_job_page_shows_log_tail(app_parts) -> None:
     client = TestClient(app)
     location = _upload_pdf(client)
     page = client.get(location)
-    assert "Protokoll" in page.text
-    assert "editing 30%" in page.text
+    assert "Technische Details" in page.text
+    assert "Abschnitt 1/2" in page.text
 
 
 def test_failed_job_offers_resume_and_restart(app_parts, monkeypatch) -> None:
@@ -670,14 +670,17 @@ def test_worker_reports_units_and_resume_language(tmp_path) -> None:
 
     def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
         if progress:
-            progress("speaking", 66, "12/61")
+            progress("speaking", 66, "12/61 #ok")
+            seen["detail"] = index.get(job.id).activity.get("detail", "")
         return _fake_result(out_dir)
 
+    seen: dict[str, str] = {}
     worker = Worker(index, config, run_fn=run_fn, inline=True)
     worker.enqueue(job.id)
     done = index.get(job.id)
-    assert done.message == "Einheit 12 von 61"
+    assert seen["detail"] == "Einheit 12 von 61"  # no ETA yet: fewer than 5 items
     assert done.options["stage"] == "speaking"
+    assert any("Einheit 12/61" in line for line in done.logs)
 
 
 def test_theme_switch_and_toast_present(app_parts) -> None:
@@ -699,3 +702,36 @@ def test_polling_excludes_logtail(app_parts) -> None:
     partial = client.get(f"{location}/status").text
     assert "Protokoll" not in partial
     assert "Protokoll" in client.get(location).text
+
+
+def test_log_endpoint_returns_new_lines_only(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job_id = location.rsplit("/", 1)[-1]
+    full = client.get(f"/jobs/{job_id}/log")
+    assert full.status_code == 200
+    body = full.json()
+    assert body["count"] == len(body["lines"]) > 1
+    tail = client.get(f"/jobs/{job_id}/log?after={body['count'] - 1}")
+    assert len(tail.json()["lines"]) == 1
+    assert tail.json()["count"] == body["count"]
+
+
+def test_log_download_is_plain_text(app_parts) -> None:
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    response = client.get(f"{location}/log.txt")
+    assert response.status_code == 200
+    assert "Redigieren: gestartet" in response.text
+
+
+def test_status_block_renders_activity_detail(app_parts) -> None:
+    """Stepper, badge and status text all read the ONE activity record."""
+    app, _index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    page = client.get(location)
+    assert "zuletzt aktiv vor" in page.text
+    assert "Technische Details" in page.text

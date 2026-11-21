@@ -15,6 +15,7 @@ import time
 import wave
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -147,7 +148,7 @@ class QwenCppBackend(TTSBackend):
         items: list[tuple[str, Path]],
         language: str,
         params: TTSParams,
-        progress: Callable[[int, int], None] | None = None,
+        progress: Callable[..., None] | None = None,
     ) -> list[float]:
         """Synthesize all items against one server; retry empty generations.
 
@@ -158,6 +159,8 @@ class QwenCppBackend(TTSBackend):
         self.failed_units = []
         durations: list[float] = []
         for index, (text, path) in enumerate(items, start=1):
+            started = time.monotonic()
+            info: dict[str, Any] = {}
             for attempt in range(1, _MAX_ATTEMPTS + 1):
                 try:
                     audio = self.synthesize(text, language, params)
@@ -169,12 +172,14 @@ class QwenCppBackend(TTSBackend):
                         self.failed_units.append(path.stem)
                         path.write_bytes(_silence_wav())
                         durations.append(_SILENCE_SECONDS)
+                        info = {"fail": True}
                     continue
                 path.write_bytes(audio.data)
                 durations.append(audio.duration_seconds)
+                info = {"audio": audio.duration_seconds, "took": time.monotonic() - started}
                 break
             if progress:
-                progress(index, len(items))
+                progress(index, len(items), info)
         return durations
 
     def list_voices(self) -> list[Voice]:

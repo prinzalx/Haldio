@@ -6,12 +6,12 @@ import html
 import json
 import re
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -111,6 +111,20 @@ def create_app(
         return templates.TemplateResponse(
             request, "partials/job_status.html", _job_context(app.state.index, job_id, job)
         )
+
+    @app.get("/jobs/{job_id}/log")
+    def job_log_tail(job_id: str, after: int = 0) -> dict[str, Any]:
+        """New log lines since index <after> (polled while the box is open)."""
+        logs = _require_job(app.state.index, job_id).logs
+        return {"count": len(logs), "lines": logs[after:]}
+
+    @app.get("/jobs/{job_id}/log.txt", response_class=PlainTextResponse)
+    def job_log_file(job_id: str) -> PlainTextResponse:
+        job = _require_job(app.state.index, job_id)
+        path = app.state.index.jobs_dir / job_id / "logs" / "job.log"
+        if path.is_file():
+            return PlainTextResponse(path.read_text(encoding="utf-8"))
+        return PlainTextResponse("\n".join(job.logs) + ("\n" if job.logs else ""))
 
     @app.get("/jobs/{job_id}/download/{file_name}")
     def download(job_id: str, file_name: str) -> FileResponse:
@@ -352,11 +366,27 @@ def _job_context(index: JobIndex, job_id: str, job: Job) -> dict[str, Any]:
     return {
         "job": job,
         "status": status_label(job.status),
-        "stepper": stage_rows(job.status, str(job.options.get("stage", ""))),
+        "stepper": stage_rows(
+            job.status, str(job.activity.get("stage") or job.options.get("stage", ""))
+        ),
         "files": _job_files(index, job),
         "has_script": _has_script(index, job_id),
         "summary": _load_doc_map(index, job_id),
+        **_activity_info(job),
     }
+
+
+def _activity_info(job: Job) -> dict[str, Any]:
+    """Seconds since the last activity event and the stall warning flag."""
+    activity = job.activity or {}
+    age: int | None = None
+    try:
+        updated = datetime.fromisoformat(str(activity.get("updated_at", "")))
+        age = max(0, int((datetime.now(UTC) - updated).total_seconds()))
+    except (TypeError, ValueError):
+        age = None
+    stale = bool(age is not None and activity.get("state") == "running" and age >= 60)
+    return {"activity_age": age, "activity_stale": stale}
 
 
 def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:

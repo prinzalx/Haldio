@@ -136,11 +136,11 @@ def run_script(
     config: Config,
     out_dir: Path,
     client_factory: Callable[[], LlmClient] | None = None,
-    progress: Callable[[str, int], None] | None = None,
+    progress: Callable[..., None] | None = None,
     language: str = "",
 ) -> ScriptResult:
     """Run S1..S7 and write the job folder layout."""
-    report = progress or (lambda _stage, _value: None)
+    report = progress or (lambda *_a, **_kw: None)
     ingested = ingest(pdf_path)
     if not ingested.ok:
         return ScriptResult(out_dir=out_dir, error=ingested.error)
@@ -149,6 +149,7 @@ def run_script(
     out_dir.mkdir(parents=True, exist_ok=True)
     document = PyMuPDFExtractor().extract(pdf_path)
     _write_json(out_dir / "01_extract" / "document.json", document.to_dict())
+    report("extracting", 7, f"{ingested.page_count} Seiten gelesen #summary")
 
     doc_map = build_doc_map(document)
     _write_json(out_dir / "02_plan" / "doc_map.json", doc_map)
@@ -156,6 +157,7 @@ def run_script(
     detected = document.language if document.language in ("de", "en") else "de"
     target_language = language if language in ("de", "en") else detected
     chunks = make_chunks(document, config.llm.max_input_tokens, dict(config.policies))
+    report("planning", 9, f"{len(chunks)} Abschnitte geplant #summary")
 
     system_prompt, examples = load_prompt_version(config)
     system_prompt = system_with_examples(system_prompt, examples)
@@ -165,8 +167,8 @@ def run_script(
     previous_tail = ""
     _run_hook("before_edit", config.hooks.before_edit)
     try:
-        for index, chunk in enumerate(chunks):
-            report("editing", 10 + int(50 * index / max(1, len(chunks))))
+        for index, chunk in enumerate(chunks, start=1):
+            report("editing", 10 + int(50 * (index - 1) / max(1, len(chunks))))
             chunk["previous_script_tail"] = previous_tail
             edit, issues = edit_chunk_with_retry(
                 chunk, client, system_prompt, target_language, config.editor.max_retries
@@ -176,6 +178,7 @@ def run_script(
                 ChunkQA(chunk_id=chunk["chunk_id"], issues=issues, needs_review=edit.needs_review)
             )
             _write_json(out_dir / "03_edit" / "chunks" / f"{chunk['chunk_id']}.in.json", chunk)
+            spoken = ""
             if edit.result is not None:
                 _write_json(
                     out_dir / "03_edit" / "chunks" / f"{chunk['chunk_id']}.out.json",
@@ -183,6 +186,25 @@ def run_script(
                 )
                 spoken = " ".join(b.text for b in edit.result.blocks)
                 previous_tail = " ".join(spoken.split()[-20:])
+            report(
+                "editing",
+                10 + int(50 * index / max(1, len(chunks))),
+                f"{index}/{len(chunks)} ({len(spoken)} Zeichen) #ok",
+            )
+            problems = [
+                f"{sum(1 for i in issues if i.is_error)} Fehler"
+                if any(i.is_error for i in issues)
+                else "",
+                f"{sum(1 for i in issues if not i.is_error)} Warnungen"
+                if any(not i.is_error for i in issues)
+                else "",
+            ]
+            verdict = ", ".join(p for p in problems if p) or "ohne Beanstandungen"
+            report(
+                "verifying",
+                10 + int(50 * index / max(1, len(chunks))),
+                f"{index}/{len(chunks)} {verdict} #ok",
+            )
     finally:
         if client_factory is None:
             client.close()
@@ -192,6 +214,7 @@ def run_script(
     script_md, data = assemble_script(edits)
     write_script(out_dir, script_md, data)
     write_qa_report(out_dir, render_qa_html(qa, doc_map))
+    report("script", 58, f"{len(chunks)} Abschnitte geschrieben #summary")
 
     return ScriptResult(
         out_dir=out_dir,
@@ -239,7 +262,7 @@ def run_book(
     client_factory: Callable[[], LlmClient] | None = None,
     backend_factory: Callable[[TtsConfig], TTSBackend] | None = None,
     pronunciations_path: Path | None = None,
-    progress: Callable[[str, int], None] | None = None,
+    progress: Callable[..., None] | None = None,
     stop_after_script: bool = False,
     stop_before_tts: bool = False,
     gate: Callable[[str], None] | None = None,
@@ -276,8 +299,8 @@ def run_book(
             out_dir,
             script.language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
-            progress=lambda done, total: report(
-                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total}"
+            progress=lambda done, total, note="": report(
+                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total} {note}".strip()
             ),
         )
     finally:
@@ -292,6 +315,9 @@ def run_book(
         config.audio.formats,
         config.audio.pause_ms.model_dump(),
         config.audio.mp3_bitrate_kbps,
+        progress=lambda i, n, fmt="": report(
+            "mastering", 90 + int(10 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
+        ),
     )
     return BookResult(script, spoken, master)
 
@@ -306,7 +332,7 @@ def run_speech(
     gate: Callable[[str], None] | None = None,
 ) -> BookResult:
     """Run only S8 and S9 for a job whose script.json already exists (after review)."""
-    report = progress or (lambda *_a: None)
+    report = progress or (lambda *_a, **_kw: None)
     script = ScriptResult(out_dir=out_dir, chunks=0, language=language)
     data = json.loads((out_dir / "04_script" / "script.json").read_text(encoding="utf-8"))
     report("speaking", 65)
@@ -321,8 +347,8 @@ def run_speech(
             out_dir,
             language,
             load_pronunciations(pronunciations_path or Path("pronunciations.yaml")),
-            progress=lambda done, total: report(
-                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total}"
+            progress=lambda done, total, note="": report(
+                "speaking", 65 + int(20 * done / max(1, total)), f"{done}/{total} {note}".strip()
             ),
         )
     finally:
@@ -336,5 +362,8 @@ def run_speech(
         config.audio.formats,
         config.audio.pause_ms.model_dump(),
         config.audio.mp3_bitrate_kbps,
+        progress=lambda i, n, fmt="": report(
+            "mastering", 90 + int(10 * i / max(1, n)), f"{i}/{n} {fmt} #ok".strip()
+        ),
     )
     return BookResult(script, spoken, master)

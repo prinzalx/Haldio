@@ -1,8 +1,11 @@
-{% if job.logs %}
-<details class="logtail" data-log="{{ job.id }}"{% if job.status not in ('queued',
-     'extracting', 'planning', 'editing', 'verifying', 'speaking', 'mastering') %} open{% endif %}>
-  <summary>Protokoll (letzte {{ job.logs[-8:] | length }} von {{ job.logs | length }})</summary>
-  <pre>{% for line in job.logs[-8:] %}{{ line }}
-{% endfor %}</pre>
+<details class="logtail" data-log="{{ job.id }}" data-log-src="/jobs/{{ job.id }}/log"
+         data-log-total="{{ job.logs | length }}"
+         {% if job.status not in ('queued', 'extracting', 'planning', 'editing', 'verifying',
+         'speaking', 'mastering') %}open{% endif %}>
+  <summary>🗒 Technische Details (<span data-log-count>{{ job.logs | length }}</span> Einträge)</summary>
+  <div class="logbox">
+    <pre data-log-lines>{% for line in job.logs %}<span class="{% if '[ERROR]' in line %}log-err{% elif '[WARN]' in line %}log-warn{% endif %}">{{ line }}
+</span>{% endfor %}</pre>
+  </div>
+  <p class="log-actions"><a href="/jobs/{{ job.id }}/log.txt">Protokoll herunterladen</a></p>
 </details>
-{% endif %}

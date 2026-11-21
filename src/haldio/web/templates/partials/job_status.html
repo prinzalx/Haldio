@@ -1,6 +1,6 @@
 <div id="job-status"
      {% if job.status in ('queued', 'extracting', 'planning', 'editing', 'verifying',
-                         'waiting_for_user', 'speaking', 'mastering') %}
+                         'script', 'waiting_for_user', 'speaking', 'mastering') %}
      hx-get="/jobs/{{ job.id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"
      {% endif %}>
   <ol class="stepper">
@@ -18,7 +18,28 @@
     <span class="badge badge-{{ job.status }}">{{ status.icon }} {{ status.label }}</span>
     <progress value="{{ job.progress }}" max="100"></progress> {{ job.progress }}%
   </p>
-  {% if job.message %}<p class="muted">{{ job.message }}</p>{% endif %}
+  {% set act = job.activity %}
+  {% if act.state %}
+  <p class="activity">
+    {% if act.state == "running" %}
+    <span class="spinner" aria-hidden="true"></span>
+    <span>{{ act.detail }}</span>
+    {% elif act.state == "waiting" %}
+    <span class="pause">⏸ Pause – es läuft nichts</span>
+    {% else %}
+    <span>{{ act.detail }}</span>
+    {% endif %}
+  </p>
+  {% if act.state == "waiting" and act.detail %}<p class="muted">{{ act.detail }}</p>{% endif %}
+  {% if activity_age is not none %}
+  <p class="muted small">zuletzt aktiv vor {{ activity_age }} s</p>
+  {% endif %}
+  {% if activity_stale %}
+  <p class="warn-text">⚠ Keine Aktivität seit {{ activity_age }} s</p>
+  {% endif %}
+  {% elif job.message %}
+  <p class="muted">{{ job.message }}</p>
+  {% endif %}
   {% if job.status == "awaiting_tts" %}
   <p class="error">🔊 Beginn der TTS: Bitte alle anderen lokalen LLM beenden.</p>
   <form method="post" action="/jobs/{{ job.id }}/speak">

@@ -7,6 +7,7 @@ import shutil
 import struct
 import subprocess
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,7 @@ def make_master(
     pause_ms: dict[str, int],
     bitrate_kbps: int = 96,
     sample_rate: int = 24000,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> MasterResult:
     """Merge 05_speak/units.json audio into 06_master/book.<format> files."""
     if shutil.which("ffmpeg") is None:
@@ -117,11 +119,13 @@ def make_master(
         return MasterResult(error=f"ffmpeg concat failed: {error}")
 
     result = MasterResult()
-    for audio_format in formats:
+    for index, audio_format in enumerate(formats, start=1):
         target = master_dir / f"book.{audio_format}"
         try:
             _ffmpeg_encode(merged, target, audio_format, bitrate_kbps)
             result.files.append(target)
+            if progress:
+                progress(index, len(formats), audio_format.upper())
         except subprocess.CalledProcessError as error:
             result.error = f"ffmpeg encode {audio_format} failed: {error}"
             return result

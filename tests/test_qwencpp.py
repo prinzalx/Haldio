@@ -73,12 +73,16 @@ def test_synthesize_batch_writes_files_and_progress(tmp_path: Path) -> None:
 
     backend = _backend(handler)
     items = [("Ein Text.", tmp_path / "a.wav"), ("Noch ein Text.", tmp_path / "b.wav")]
-    calls: list[tuple[int, int]] = []
+    calls: list[tuple[int, int, dict]] = []
     durations = backend.synthesize_batch(
-        items, "de", TTSParams(voice="dylan"), lambda d, t: calls.append((d, t))
+        items,
+        "de",
+        TTSParams(voice="dylan"),
+        lambda d, t, info=None: calls.append((d, t, info)),
     )
     assert durations == [2.0, 2.0]
-    assert calls == [(1, 2), (2, 2)]
+    assert [c[:2] for c in calls] == [(1, 2), (2, 2)]
+    assert calls[0][2]["audio"] == 2.0  # per-unit info for the log
     assert (tmp_path / "a.wav").read_bytes().startswith(b"RIFF")
     assert (tmp_path / "b.wav").is_file()
 

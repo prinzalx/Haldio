@@ -126,12 +126,25 @@ textarea {
 code { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 .logtail { margin: 8px 0; }
 .logtail summary { color: var(--muted); cursor: pointer; font-size: 0.75rem; }
+.logbox { max-height: 240px; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--bg); }
 .logtail pre {
-  margin: 4px 0 0; padding: 6px 8px; max-height: 170px; overflow-y: auto;
-  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  margin: 0; padding: 6px 8px;
   font-family: Consolas, monospace; font-size: 0.75rem; line-height: 1.45;
   white-space: pre-wrap;
 }
+.logtail .log-err { color: var(--bad-text); }
+.logtail .log-warn { color: var(--warn-text); }
+.log-actions { margin: 4px 0 0; font-size: 0.75rem; }
+.activity { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.spinner {
+  width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: hal-spin 1s linear infinite;
+}
+@keyframes hal-spin { to { transform: rotate(360deg); } }
+.pause { color: var(--muted); }
+.small { font-size: 0.75rem; }
 
 /* --- correction 4: upload card --- */
 .upload { display: block; }

@@ -76,14 +76,20 @@ def synthesize_script(
     out_dir: Path,
     language: str,
     pronunciations: dict[str, str] | None = None,
-    progress: Callable[[int, int], None] | None = None,
+    progress: Callable[..., None] | None = None,
 ) -> SpeakResult:
-    """Synthesize every script block in order; write 05_speak/units.json + WAV files."""
+    """Synthesize every script block in order; write 05_speak/units.json + WAV files.
+
+    progress(done, total, note) counts ALL units: cached ones report with a
+    "#cache" marker during the scan, real ones report from the backend with
+    an "#ok" / "#fail" marker and a duration note.
+    """
     units_dir = out_dir / "05_speak" / "units"
     units_dir.mkdir(parents=True, exist_ok=True)
     result = SpeakResult()
     params = TTSParams(voice=tts_config.speaker)
     pending: list[tuple[str, Path]] = []
+    was_cached: list[bool] = []
     for chunk in script_data.get("chunks", []):
         for block in chunk.get("blocks", []):
             spoken = make_speakable(block.get("text", ""), language, pronunciations)
@@ -103,15 +109,37 @@ def synthesize_script(
                         "text": piece,
                     }
                 )
-                if path.is_file():
+                cached = path.is_file()
+                was_cached.append(cached)
+                if cached:
                     result.cached += 1
                 else:
                     pending.append((piece, path))
     if not result.units:
         result.error = "no speakable units in script"
         return result
+    total = len(result.units)
+    done = 0
+    for cached in was_cached:
+        if not cached:
+            continue
+        done += 1
+        if progress:
+            progress(done, total, "#cache")
     if pending:
-        durations = backend.synthesize_batch(pending, language, params, progress)
+
+        def on_backend_unit(index: int, total_pending: int, info: dict | None = None) -> None:
+            nonlocal done
+            done += 1
+            if not progress:
+                return
+            marker = "fail" if (info or {}).get("fail") else "ok"
+            note = ""
+            if info and "audio" in info:
+                note = f"({info['audio']:.1f} s Audio in {info['took']:.1f} s)"
+            progress(done, total, f"{note} #{marker}".strip())
+
+        durations = backend.synthesize_batch(pending, language, params, on_backend_unit)
         result.synthesized = len(pending)
         result.total_seconds = sum(durations)
         failed = set(getattr(backend, "failed_units", []))

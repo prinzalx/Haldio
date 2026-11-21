@@ -66,6 +66,34 @@
     const t = e.target;
     if (t.matches && t.matches("form[hx-post]") && e.detail.successful) showToast("Gespeichert");
   });
+  // "Technische Details": new lines arrive by polling, but only while the box is open
+  (function () {
+    const box = document.querySelector("details[data-log-src]");
+    if (!box) return;
+    const lines = box.querySelector("[data-log-lines]");
+    const counter = box.querySelector("[data-log-count]");
+    let count = parseInt(box.dataset.logTotal || "0", 10);
+    setInterval(async () => {
+      if (!box.open) return;
+      try {
+        const res = await fetch(box.dataset.logSrc + "?after=" + count);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.lines.length) return;
+        for (const line of data.lines) {
+          const span = document.createElement("span");
+          span.className = line.includes("[ERROR]") ? "log-err"
+                         : line.includes("[WARN]") ? "log-warn" : "";
+          span.textContent = line + "\n";
+          lines.appendChild(span);
+        }
+        count = data.count;
+        counter.textContent = String(count);
+        const holder = lines.parentElement;
+        holder.scrollTop = holder.scrollHeight;
+      } catch (err) {}
+    }, 2000);
+  })();
   // upload card: chosen file name + size, drag & drop, disable button while uploading
   (function () {
     const input = document.getElementById("file");
