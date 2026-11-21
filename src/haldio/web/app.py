@@ -702,6 +702,23 @@ def _hint_count(entries: list[dict[str, Any]]) -> int:
     return sum(1 for e in entries if e["warnings"] or e["needs_review"] or e["empty"])
 
 
+def _block_display(block: dict[str, Any]) -> str:
+    """Readable text of one chunk block for the Original column.
+
+    Tables keep their content in cells and lists in list_items; the plain
+    text field can be blank there, so fall back to those before hiding the
+    block.
+    """
+    text = str(block.get("text", "")).strip()
+    if text:
+        return text
+    cells = block.get("cells") or []
+    if cells:
+        return "; ".join(" ".join(str(cell) for cell in row).strip() for row in cells)
+    items = block.get("list_items") or []
+    return "; ".join(str(i.get("text", "")) for i in items if isinstance(i, dict))
+
+
 def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
     """Per chunk: script blocks, original text, chapter title and readable warnings."""
     folder = index.jobs_dir / job_id
@@ -716,7 +733,7 @@ def _review_entries(index: JobIndex, job_id: str) -> list[dict[str, Any]]:
                 src_data = json.loads(src.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 src_data = {}
-            original = "\n".join(str(b.get("text", "")) for b in src_data.get("blocks", []))
+            original = "\n".join(_block_display(b) for b in src_data.get("blocks", []))
             chapter = str(src_data.get("chapter_path") or "")
             span = src_data.get("page_span")
             if isinstance(span, list) and span and isinstance(span[0], int):

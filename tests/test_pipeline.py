@@ -57,6 +57,35 @@ def test_chunk_context_has_chapter_path() -> None:
     assert chunks[0]["chapter_path"].startswith("Kapitel Eins")
 
 
+def test_chunk_keeps_table_cells_and_list_items() -> None:
+    """Content stored outside the text field must survive into the chunk file."""
+    doc = Document(
+        title="T",
+        author="",
+        page_count=1,
+        language="de",
+        blocks=[
+            Block(
+                id="b1",
+                type="table",
+                text=" ",
+                page=1,
+                cells=[["Einleitung", "4"]],
+            ),
+            Block(
+                id="b2",
+                type="list",
+                text="",
+                page=1,
+                list_items=[{"text": "erster Punkt", "level": 0}],
+            ),
+        ],
+    )
+    blocks = make_chunks(doc, max_tokens=1000)[0]["blocks"]
+    assert blocks[0]["cells"] == [["Einleitung", "4"]]
+    assert blocks[1]["list_items"] == [{"text": "erster Punkt", "level": 0}]
+
+
 def test_doc_map_reference_index() -> None:
     doc_map = build_doc_map(_doc())
     assert "reference_index" in doc_map

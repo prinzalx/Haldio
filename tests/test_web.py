@@ -1306,6 +1306,44 @@ def test_review_empty_section_has_input_and_buttons(app_parts) -> None:
     assert "Erstes Kapitel &gt; Anfänge" in page.text
 
 
+def test_review_original_shows_tables_and_lists(app_parts) -> None:
+    """Table cells and list items must be visible in the Original column."""
+    _app, _index, _calls = app_parts
+    client = TestClient(_app)
+    job_id = _review_setup(
+        app_parts,
+        [
+            {
+                "chunk_id": "c0001",
+                "blocks": [{"kind": "paragraph", "text": "Hörtext."}],
+                "warnings": [],
+                "needs_review": False,
+            }
+        ],
+        {
+            "c0001.in.json": {
+                "blocks": [
+                    {"type": "heading", "text": "Kapitel", "level": 1},
+                    {
+                        "type": "table",
+                        "text": " ",
+                        "cells": [["Einleitung", "4"], ["Kontext", "5"]],
+                    },
+                    {
+                        "type": "list",
+                        "text": "",
+                        "list_items": [{"text": "erster Punkt", "level": 0}],
+                    },
+                ]
+            }
+        },
+    )
+    page = client.get(f"/jobs/{job_id}/review")
+    assert page.status_code == 200
+    assert "Einleitung" in page.text and "Kontext" in page.text  # table content
+    assert "erster Punkt" in page.text  # list content
+
+
 def test_review_use_original_copies_text(app_parts) -> None:
     import json
 
@@ -1322,6 +1360,31 @@ def test_review_use_original_copies_text(app_parts) -> None:
     script_file = index.jobs_dir / job_id / "04_script" / "script.json"
     saved = json.loads(script_file.read_text(encoding="utf-8"))
     assert saved["chunks"][0]["blocks"][0]["text"] == "Ursprünglicher Text."
+
+
+def test_review_use_original_includes_table_cells(app_parts) -> None:
+    """Copying the original of a table chunk takes the cell content, not the blank."""
+    import json
+
+    _app, index, _calls = app_parts
+    client = TestClient(_app)
+    job_id = _review_setup(
+        app_parts,
+        [{"chunk_id": "c0001", "blocks": [], "warnings": [], "needs_review": False}],
+        {
+            "c0001.in.json": {
+                "blocks": [
+                    {"type": "table", "text": " ", "cells": [["Einleitung", "4"], ["Kontext", "5"]]}
+                ]
+            }
+        },
+    )
+    response = client.post(f"/jobs/{job_id}/review/use_original", data={"ci": "0"})
+    assert response.status_code == 200
+    saved = json.loads(
+        (index.jobs_dir / job_id / "04_script" / "script.json").read_text(encoding="utf-8")
+    )
+    assert saved["chunks"][0]["blocks"][0]["text"] == "Einleitung 4; Kontext 5"
 
 
 def test_review_counter_and_german_reasons(app_parts) -> None:

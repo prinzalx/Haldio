@@ -47,6 +47,8 @@ def make_chunks(
                 entry["level"] = block.level
             if block.cells:
                 entry["cells"] = block.cells
+            if block.list_items:
+                entry["list_items"] = block.list_items
             chunk_blocks.append(entry)
         chunks.append(
             {

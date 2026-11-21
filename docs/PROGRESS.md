@@ -303,7 +303,7 @@ became a time-shifted process.
 - Empty section: fixed - warning "Für diesen Abschnitt gibt es keinen Hörtext."; every section has an input field (empty ones get one too); buttons "Original übernehmen" (copies the original text) and "Neu erzeugen" (editor LLM, shown only when reachable).
 - editor.fallback_to_source: fixed - new config option (default true); synthesize_script reads the ORIGINAL text of empty sections (after the normalizer) and counts them; SpeakResult.empty_sections.
 - Log + QA + count: fixed - speaking logs "N Abschnitte ohne Hörtext – es wird der Originaltext vorgelesen."; qa.json/qa_report.html mark "kein Hörtext" and count "ohne Hörtext: N"; the review page header counts "X von Y Abschnitten mit Hinweis".
-- Truncated originals: investigated - the stored original (03_edit/chunks/*.in.json) is complete; the truncation was only visual (tiny monospace font + fixed 260px box). Original and script now use the same font and size and wrap long lines.
+- Truncated originals: investigated - the stored original (03_edit/chunks/*.in.json) is complete; the low boxes were short chunks plus a scrollable 260 px box (no clipping). Table and list content was still hidden from the Original column - fixed in Correction 6 §2.4 below. Original and script now use the same font and size and wrap long lines.
 - Speichern: fixed - the button starts disabled and enables only after a real change in that chunk (JS); after saving it shows "Gespeichert".
 - Filter: fixed - clear label "Nur Abschnitte mit Hinweis anzeigen"; empty sections are hidden by it too.
 - Job page: fixed - the entry reads "Skript prüfen (optional)" with the hint count ("· 12 Hinweise").
@@ -374,5 +374,9 @@ became a time-shifted process.
 ## Correction 6 - §2.3: planning stage writes the real summary
 
 - done. S3 now asks the LLM (`llm_summary` in plan.py, PLANNER_SYSTEM asks for 5-8 sentences + 3-8 topics as JSON; the document text goes as data in the user message, bounded to 6000 chars). On success `doc_map.json` stores the LLM summary and topics with `summary_source: "llm"`; on any failure (LlmError, non-JSON, non-object, empty summary) `quick_summary` fills it with `summary_source: "fallback"`. Proof: `test_run_script_llm_writes_the_plan_summary`, `test_run_script_summary_falls_back_when_llm_fails`, `test_llm_summary_rejects_bad_answers`, plus `summary_source == "fallback"` in `test_run_script_end_to_end`.
+
+## Correction 6 - §2.4: original column shows all block content
+
+- done. Fact check on the real job (274 chunks): the review page joined the `text` of ALL blocks, so headings, paragraphs and footnotes were visible - but table blocks carry their content in `cells` (`text` is one space) and list blocks in `list_items` (text empty when the bullet marker is a separate glyph), and `make_chunks` never stored `list_items` at all. So tables and lists were hidden in the Original column. The owner's example chunk c0131 really holds only heading + 24-char paragraph (page-tail chunk); the box is `max-height: 260 px; overflow-y: auto` (scrolls, does not clip to two lines). Fix: `_block_display` in web/app.py falls back to cells (rows joined, separated by "; ") and list_items; chunk.py stores `list_items` from now on. Caveat: historical `03_edit/chunks/*.in.json` files lack `list_items` until re-chunking, so old jobs show tables but not list items. The editor message and cache hash change because `build_user_message` now dumps `list_items` too (chunks re-edit once after upgrade). Proof: `test_review_original_shows_tables_and_lists`, `test_chunk_keeps_table_cells_and_list_items`, `test_review_use_original_includes_table_cells`.
 
 Stop - waiting for the owner's OK on the screenshots.
