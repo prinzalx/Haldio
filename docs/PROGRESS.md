@@ -336,3 +336,18 @@ became a time-shifted process.
 - Section 7, top bar: done - the bar sticks to the top while scrolling; the current page is marked in the navigation (`aria-current="page"`, accent colour); job pages mark neither link.
 - Section 8, settings page: done - the effective-config table also shows the data directory ("Daten") and the editor prompt version ("Hörtext-Prompt"); no secrets are rendered (the API key stays out of the page).
 - Tests: 133 pass - stylesheet assertions for the polish rules, active-page marking per route, settings rows.
+
+## Correction 5 - section 9 Tests, screenshots, finish
+
+- Tests: 133 pass, ruff clean (src + tests) - full suite green at the end of the correction.
+- Screenshots: regenerated - `scripts/screenshots.py` (temp data dir, mock backend, port 8765 -
+  the live `haldio serve` and `data/` were never touched) captured library, running job,
+  finished job and review in light AND dark into `docs/screenshots/`; the seed message now
+  shows the current wording ("noch etwa").
+- README: done - the "Web interface" section describes the correction 5 state (Gerade box,
+  Gesamt %, card-bottom actions with Loeschen hidden while running, sticky top bar with
+  active-page mark).
+- Reviewer: sections 5, 6-8 were each reviewed by the implementation-reviewer subagent;
+  all justified change points were applied before the commits.
+
+Stop - waiting for the owner's OK on the screenshots.

@@ -56,21 +56,25 @@ Open http://127.0.0.1:8505 (German user interface).
   "Skript vor der Sprachausgabe prüfen" option; the job list shows title, file,
   pages, audio length, date, a German status badge and progress, newest first.
   A banner counts jobs waiting in the ready2tts pool ("Alle TTS starten").
-- **Job page** — a seven-stage stepper (Einlesen → … → Mastern) with state text,
-  progress bar and current message; during Sprechen it counts units
+- **Job page** — a seven-stage stepper (Einlesen → … → Audio fertigstellen) with state text,
+  progress bar ("Gesamt N %") and a "Gerade:" box that explains the current step and shows
+  the live detail from a single activity record; during Vorlesen it counts units
   ("Einheit 12 von 957") and shows an ETA measured from this run's finished
-  units, never a hard-coded factor. A summary card appears once the plan exists;
+  units, never a hard-coded factor. A summary card appears once the plan exists (placeholders
+  read "Wird erstellt …");
   a result card offers `<audio controls>` and downloads (MP3, OGG, Skript,
   QA-Bericht, PDF — named after the PDF title) for files that exist.
   Actions follow the state: Abbrechen, Weiter, Neu starten, Skript prüfen,
-  Löschen (dialog). The log lives in a collapsed `<details>`.
+  Löschen (dialog, far right and hidden while the job runs). The log lives in a collapsed
+  `<details>` ("Technische Details").
 - **Skript prüfen** — original text next to the edited script per chunk, chapter
   title in the header, readable warnings, save per chunk with HTMX ("Gespeichert"
   toast) and a "Nur Warnungen anzeigen" filter.
 - **Einstellungen** — read-only config table; "Test LM Studio" and "Test TTS"
   show a spinner and a clear result next to the button (TTS respects the model
   guard: the LLM must be unloaded first).
-- Light and dark theme (system preference, switchable, remembered). No Node.js:
+- Light and dark theme (system preference, switchable, remembered). The top bar sticks
+  on scroll and marks the current page. No Node.js:
   FastAPI + Jinja2 + a vendored htmx, so the UI works offline.
 
 Screenshots of all four pages in both themes: `docs/screenshots/`

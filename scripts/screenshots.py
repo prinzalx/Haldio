@@ -52,7 +52,7 @@ def _seed(index: JobIndex) -> dict[str, str]:
     running.title = "Handbuch der Technik"
     running.status = "speaking"
     running.progress = 66
-    running.message = "Einheit 12 von 957 · noch ca. 42 min"
+    running.message = "Einheit 12 von 957 · noch etwa 42 min"
     running.page_count = 120
     running.logs = [
         "10:12:03 editing 42%",
