@@ -287,10 +287,10 @@ def test_worker_cancel_queued_job(tmp_path) -> None:
     assert index.get(job.id).status == "cancelled"
 
 
-def _wait_for_status(index: JobIndex, job_id: str, wanted: str) -> str:
+def _wait_for_status(index: JobIndex, job_id: str, wanted: str, timeout: float = 5.0) -> str:
     import time
 
-    for _ in range(100):
+    for _ in range(int(timeout / 0.05)):
         status = index.get(job_id).status
         if status == wanted:
             return status
@@ -298,13 +298,14 @@ def _wait_for_status(index: JobIndex, job_id: str, wanted: str) -> str:
     return index.get(job_id).status
 
 
-def test_gate_blocks_until_continue(tmp_path) -> None:
-    """A non-mock backend pauses in waiting_for_user until the user continues."""
+def test_gate_blocks_until_continue(tmp_path, monkeypatch) -> None:
+    """Without a possible guard check the gate waits for the manual Weiter."""
     config = Config()
     config.paths.data_dir = tmp_path
     config.tts.backend = "qwencpp"
     index = JobIndex(tmp_path / "data")
     job = index.create("x.pdf")
+    monkeypatch.setattr("haldio.jobs.worker.loaded_llm_models", lambda *a, **k: None)
 
     def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
         gate = kwargs.get("gate")
@@ -318,6 +319,33 @@ def test_gate_blocks_until_continue(tmp_path) -> None:
     assert "LLM stoppen" in index.get(job.id).message
     assert worker.continue_job(job.id) is True
     assert _wait_for_status(index, job.id, "done") == "done"
+
+
+def test_gate_continues_by_itself_when_model_unloads(tmp_path, monkeypatch) -> None:
+    """Fake guard: loaded -> unloaded; the flow re-checks and continues alone."""
+    config = Config()
+    config.paths.data_dir = tmp_path
+    config.tts.backend = "qwencpp"
+    index = JobIndex(tmp_path / "data")
+    job = index.create("x.pdf")
+    checks = {"n": 0}
+
+    def fake_guard(*_a, **_k):
+        checks["n"] += 1
+        return ["bubo"] if checks["n"] < 2 else []
+
+    monkeypatch.setattr("haldio.jobs.worker.loaded_llm_models", fake_guard)
+
+    def run_fn(pdf_path, cfg, out_dir, progress=None, **kwargs):
+        gate = kwargs.get("gate")
+        if gate:
+            gate("LLM stoppen, dann Weiter drücken.")
+        return _fake_result(out_dir)
+
+    worker = Worker(index, config, run_fn=run_fn, inline=False)
+    worker.start()
+    # nobody presses anything: the re-check after 5 s frees the gate
+    assert _wait_for_status(index, job.id, "done", timeout=30) == "done"
 
 
 def test_continue_route_requeues_without_open_gate(app_parts) -> None:
@@ -528,12 +556,44 @@ def test_status_labels_are_german_for_every_status() -> None:
     assert status_label("nope")["label"] == "nope"
 
 
-def test_stage_rows_marks_failed_stage() -> None:
-    from haldio.web.labels import stage_rows
+def test_stepper_state_marks_failed_stage() -> None:
+    from haldio.jobs.index import Job
+    from haldio.web.labels import stepper_state
 
-    rows = stage_rows("failed", "speaking")
-    states = [row["state"] for row in rows]
+    job = Job(id="j", file_name="a.pdf", status="failed", options={"stage": "speaking"})
+    states = [row["state"] for row in stepper_state(job)]
     assert states == ["done", "done", "done", "done", "done", "failed", "pending"]
+
+
+def test_stepper_state_agrees_with_badge_per_status() -> None:
+    """Test table: every status has exactly one row set and no 'läuft' while waiting."""
+    from haldio.jobs.index import STATUS_VALUES, Job
+    from haldio.web.labels import stepper_state
+
+    def states_for(status: str, stage: str = "") -> list[str]:
+        job = Job(id="j", file_name="a.pdf", status=status, options={"stage": stage})
+        if status == "speaking":
+            job.activity = {"stage": "speaking"}
+        return [row["state"] for row in stepper_state(job)]
+
+    assert states_for("awaiting_tts") == [
+        "done", "done", "done", "done", "done", "waiting", "pending"]
+    assert states_for("awaiting_review") == [
+        "done", "done", "done", "done", "waiting", "pending", "pending"]
+    assert states_for("waiting_for_user") == [
+        "done", "done", "done", "done", "done", "waiting", "pending"]
+    assert states_for("queued") == [
+        "waiting", "pending", "pending", "pending", "pending", "pending", "pending"]
+    assert states_for("speaking") == [
+        "done", "done", "done", "done", "done", "current", "pending"]
+    assert states_for("done") == ["done"] * 7
+    assert states_for("cancelled", "editing") == [
+        "done", "done", "failed", "pending", "pending", "pending", "pending"]
+    for status in STATUS_VALUES:
+        states = states_for(status, "speaking")
+        assert len(states) == 7
+        if status in ("awaiting_tts", "awaiting_review", "waiting_for_user", "queued"):
+            assert "current" not in states  # nothing may claim "läuft" while waiting
 
 
 def test_library_empty_text_and_job_title(app_parts) -> None:
@@ -702,6 +762,28 @@ def test_polling_excludes_logtail(app_parts) -> None:
     partial = client.get(f"{location}/status").text
     assert "Protokoll" not in partial
     assert "Protokoll" in client.get(location).text
+
+
+@pytest.mark.parametrize("status", ["awaiting_tts", "awaiting_review", "waiting_for_user"])
+def test_polling_runs_in_every_waiting_state(app_parts, status) -> None:
+    """Correction 5: the page must refresh while a job waits, not only while it runs."""
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.get(location.rsplit("/", 1)[-1])
+    job.status = status
+    index.update(job)
+    partial = client.get(f"{location}/status").text
+    assert "every 2s" in partial
+
+
+def test_polling_stops_in_final_states(app_parts) -> None:
+    app, index, _calls = app_parts
+    client = TestClient(app)
+    location = _upload_pdf(client)
+    job = index.get(location.rsplit("/", 1)[-1])
+    assert job.status == "done"
+    assert "every 2s" not in client.get(f"{location}/status").text
 
 
 def test_log_endpoint_returns_new_lines_only(app_parts) -> None:

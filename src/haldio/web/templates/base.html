@@ -61,11 +61,30 @@
       if (saved !== null) d.open = saved === "open";
     });
   });
-  // HTMX form saves answer with a polite toast
+  // HTMX form saves answer with a polite toast (form text or a default)
   document.addEventListener("htmx:afterRequest", (e) => {
     const t = e.target;
-    if (t.matches && t.matches("form[hx-post]") && e.detail.successful) showToast("Gespeichert");
+    if (t.matches && t.matches("form[hx-post]") && e.detail.successful) {
+      showToast(t.dataset.toast || "Gespeichert");
+    }
   });
+  // after a click the button stays disabled with a spinner until the swap
+  document.addEventListener("submit", (e) => {
+    const form = e.target;
+    if (!form.matches || !form.matches("form[hx-post]")) return;
+    const btn = form.querySelector("button");
+    if (!btn) return;
+    btn.disabled = true;
+    btn.classList.add("busy");
+    if (btn.dataset.busy !== undefined) btn.textContent = "Wird gestartet …";
+  });
+  // a page that was hidden refreshes its status right away
+  const refreshStatus = () => {
+    const el = document.getElementById("job-status");
+    if (el && window.htmx) window.htmx.trigger(el, "vis");
+  };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshStatus(); });
+  window.addEventListener("pageshow", refreshStatus);
   // "Technische Details": new lines arrive by polling, but only while the box is open
   (function () {
     const box = document.querySelector("details[data-log-src]");

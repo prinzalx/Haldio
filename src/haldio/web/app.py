@@ -21,7 +21,7 @@ from haldio.jobs.index import Job, JobIndex
 from haldio.jobs.worker import Worker
 from haldio.pipeline.assemble import render_script_md
 from haldio.tts.base import ModelGuardError
-from haldio.web.labels import stage_rows, status_label, warning_text
+from haldio.web.labels import status_label, stepper_state, warning_text
 
 WEB_DIR = Path(__file__).parent
 MAX_UPLOAD_BYTES_FALLBACK = 100 * 1024 * 1024
@@ -98,7 +98,7 @@ def create_app(
     def job_page(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request, "job.html", _job_context(app.state.index, job_id, job)
+            request, "job.html", _job_context(app.state.index, job_id, job, config)
         )
 
     @app.get("/api/jobs/{job_id}")
@@ -109,7 +109,8 @@ def create_app(
     def job_status(request: Request, job_id: str) -> HTMLResponse:
         job = _require_job(app.state.index, job_id)
         return templates.TemplateResponse(
-            request, "partials/job_status.html", _job_context(app.state.index, job_id, job)
+            request, "partials/job_status.html",
+            _job_context(app.state.index, job_id, job, config),
         )
 
     @app.get("/jobs/{job_id}/log")
@@ -189,17 +190,23 @@ def create_app(
             {"job": job, "entry": entry, "saved_ci": ci, "saved": True},
         )
 
+    def _action_redirect(request: Request, job_id: str) -> RedirectResponse:
+        """HTMX calls get the fresh status block; plain forms get the page."""
+        if request.headers.get("hx-request"):
+            return RedirectResponse(f"/jobs/{job_id}/status", status_code=303)
+        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
     @app.post("/jobs/{job_id}/speak")
-    def speak_now(job_id: str) -> RedirectResponse:
+    def speak_now(job_id: str, request: Request) -> RedirectResponse:
         job = _require_job(app.state.index, job_id)
         job.options["resume_from"] = "speaking"
         job.error = ""
         app.state.index.update(job)
         app.state.worker.enqueue(job_id)
-        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+        return _action_redirect(request, job_id)
 
     @app.post("/jobs/{job_id}/restart")
-    def restart(job_id: str) -> RedirectResponse:
+    def restart(job_id: str, request: Request) -> RedirectResponse:
         job = _require_job(app.state.index, job_id)
         job.status = "queued"
         job.progress = 0
@@ -207,17 +214,17 @@ def create_app(
         job.options.pop("resume_from", None)
         app.state.index.update(job)
         app.state.worker.enqueue(job_id)
-        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+        return _action_redirect(request, job_id)
 
     @app.post("/jobs/{job_id}/continue")
-    def continue_job(job_id: str) -> RedirectResponse:
+    def continue_job(job_id: str, request: Request) -> RedirectResponse:
         job = _require_job(app.state.index, job_id)
         if job.status == "waiting_for_user" and not app.state.worker.continue_job(job_id):
             # no open gate (server restarted): queue the job again
             job.status = "queued"
             app.state.index.update(job)
             app.state.worker.enqueue(job_id)
-        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+        return _action_redirect(request, job_id)
 
     @app.post("/tts-pool/start")
     def start_tts_pool() -> RedirectResponse:
@@ -280,10 +287,10 @@ def create_app(
         return HTMLResponse(_result_span(text))
 
     @app.post("/jobs/{job_id}/cancel")
-    def cancel(job_id: str) -> RedirectResponse:
+    def cancel(job_id: str, request: Request) -> RedirectResponse:
         _require_job(app.state.index, job_id)
         app.state.worker.cancel(job_id)
-        return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+        return _action_redirect(request, job_id)
 
     @app.post("/jobs/{job_id}/delete")
     def delete(job_id: str) -> RedirectResponse:
@@ -361,17 +368,16 @@ def _load_doc_map(index: JobIndex, job_id: str) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
-def _job_context(index: JobIndex, job_id: str, job: Job) -> dict[str, Any]:
+def _job_context(index: JobIndex, job_id: str, job: Job, config: Config) -> dict[str, Any]:
     """Context shared by the job page and the polling status partial."""
     return {
         "job": job,
         "status": status_label(job.status),
-        "stepper": stage_rows(
-            job.status, str(job.activity.get("stage") or job.options.get("stage", ""))
-        ),
+        "stepper": stepper_state(job),
         "files": _job_files(index, job),
         "has_script": _has_script(index, job_id),
         "summary": _load_doc_map(index, job_id),
+        "voice": str(job.options.get("voice") or config.tts.speaker or "dylan"),
         **_activity_info(job),
     }
 

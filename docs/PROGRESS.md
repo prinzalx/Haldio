@@ -281,3 +281,16 @@ became a time-shifted process.
 - Log endpoint: fixed - GET /jobs/<id>/log?after=<n> (JSON, polled only while the box is open) + "Protokoll herunterladen" -> /jobs/<id>/log.txt.
 - Serve console: fixed - worker logs via the `haldio.worker` stdlib logger; `haldio serve` attaches a StreamHandler with the same text.
 - Tests: 115 pass - single-source event, duplicate suppression, 200-line cap, ETA rule with cache exclusion, log endpoint after=, log.txt, activity block.
+
+## Correction 5 - section 2 Buttons, polling, gates
+
+- Polling: fixed - the status block polls every 2 s in EVERY non-final state (incl. awaiting_review, awaiting_tts, waiting_for_user, running); stops only in done/failed/cancelled after one last refresh.
+- visibilitychange/pageshow: fixed - base.html JS calls refreshStatus() (htmx trigger 'vis') when the tab becomes visible again.
+- Click feedback: fixed - data-busy buttons get disabled + spinner + text "Wird gestartet …"; every action form posts hx-target=#job-status so the response replaces the status block instantly (htmx follows the 303 via GET); data-toast shows the toast; the page never stays unchanged.
+- Stepper from one function: fixed - stepper_state(job) in labels.py derives all rows from the job record alone; new "waiting" state (icon pause, word "wartet") for awaiting_review/awaiting_tts/waiting_for_user; failed/cancelled stop at the stage the worker last reported.
+- Stepper test table: fixed - test_stepper_state_agrees_with_badge_per_status checks the exact row set for every status id, incl. the new script state; stepper and badge can no longer disagree.
+- One gate: fixed - two gates merged into gate(): loaded_llm_models() check; [] = memory free → continue by itself; model loaded → detail "LM Studio lädt noch: X · ich prüfe alle 5 Sekunden" with auto re-check every 5 s, continues automatically when the model is gone; None (check unavailable) → manual "Weiter" only.
+- After 5 min: fixed - after 300 polls the detail asks to press "Erneut prüfen"; button label switches between "Weiter" and "Erneut prüfen" by the stored detail.
+- Explain unloading: fixed - the awaiting_tts note-box explains eject model / stop server in neutral yellow with numbered steps (red only for errors).
+- Pre-speech live checklist: fixed - checklist "Sprachmodell entladen / TTS-Server / Stimme" shown for awaiting_tts, waiting_for_user and speaking with live states.
+- Tests: 121 pass - polling attrs per state (parametrized), gate auto-continue with fake guard (["bubo"] → []), manual gate fallback (guard None), stepper table.

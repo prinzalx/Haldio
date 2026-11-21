@@ -14,6 +14,7 @@ from typing import Any
 
 from haldio.config import Config
 from haldio.jobs.index import Job, JobIndex
+from haldio.llm.client import loaded_llm_models
 from haldio.pipeline.run import BookResult, run_book, run_speech
 from haldio.tts.base import ModelGuardError
 
@@ -266,20 +267,59 @@ class Worker:
             self.index.update(job)
 
         def gate(note: str) -> None:
-            """Pause the stage in waiting_for_user until the user presses Continue."""
+            """Pause before speaking until the LLM is out of the way.
+
+            One flow, no second click: while `lms` reports the models, the
+            gate re-checks every 5 seconds and continues by itself; when no
+            check is possible it waits for the manual Weiter button, and
+            after 5 minutes it asks for the "Erneut prüfen" button.
+            """
             if job_id in self._cancelled:
                 raise _Cancelled()
             event = threading.Event()
             with self._lock:
                 self._gates[job_id] = event
+
+            def wait_more() -> bool:
+                return event.wait(1.0)
+
+            loaded = loaded_llm_models()
+            if loaded == []:
+                return  # memory is already free: continue with no pause
+            manual = loaded is None
             job.status = "waiting_for_user"
-            job.message = note
-            emit("waiting", str(job.options.get("stage", "")), note)
-            self._log(job, note)
+            detail = note if manual else (
+                f"LM Studio lädt noch: {', '.join(loaded)} · ich prüfe alle 5 Sekunden"
+            )
+            job.message = detail
+            emit("waiting", "speaking", detail)
+            self._log(job, detail)
             self.index.update(job)
-            while not event.wait(1.0):
-                if job_id in self._cancelled:
-                    break
+            if manual:
+                while not wait_more():
+                    if job_id in self._cancelled:
+                        break
+            else:
+                polls = 0
+                while not wait_more():
+                    if job_id in self._cancelled:
+                        break
+                    polls += 1
+                    if polls % 5:
+                        continue
+                    loaded = loaded_llm_models()
+                    if loaded == []:
+                        break  # model gone: the flow continues on its own
+                    if loaded is None:
+                        detail = f"{note} (Prüfen nicht möglich)"
+                    elif polls >= 300:
+                        detail = (
+                            f"LM Studio lädt noch: {', '.join(loaded)}"
+                            " · bitte „Erneut prüfen“ drücken"
+                        )
+                    job.message = detail
+                    emit("waiting", "speaking", detail)
+                    self.index.update(job)
             with self._lock:
                 self._gates.pop(job_id, None)
             if job_id in self._cancelled:

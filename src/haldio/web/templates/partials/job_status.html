@@ -1,16 +1,15 @@
 <div id="job-status"
-     {% if job.status in ('queued', 'extracting', 'planning', 'editing', 'verifying',
-                         'script', 'waiting_for_user', 'speaking', 'mastering') %}
-     hx-get="/jobs/{{ job.id }}/status" hx-trigger="every 2s" hx-swap="outerHTML"
+     {% if job.status not in ('done', 'failed', 'cancelled') %}
+     hx-get="/jobs/{{ job.id }}/status"
+     hx-trigger="every 2s, vis"
+     hx-swap="outerHTML"
      {% endif %}>
   <ol class="stepper">
     {% for row in stepper %}
     <li class="step step-{{ row.state }}">
       <span class="step-icon" aria-hidden="true">{{ row.icon }}</span>
       {{ row.label }}
-      <span class="step-state">({{ "fertig" if row.state == "done" else
-        "läuft" if row.state == "current" else
-        "fehlgeschlagen" if row.state == "failed" else "offen" }})</span>
+      <span class="step-state">({{ row.word }})</span>
     </li>
     {% endfor %}
   </ol>
@@ -40,15 +39,33 @@
   {% elif job.message %}
   <p class="muted">{{ job.message }}</p>
   {% endif %}
+  {% if job.status in ('awaiting_tts', 'waiting_for_user') or job.status == 'speaking' %}
+  <ul class="checklist">
+    <li>🧠 Sprachmodell:
+      {% if job.status == 'speaking' %}entladen ✓{% else %}muss frei sein (LM Studio: Modell
+      auswerfen oder Server stoppen){% endif %}</li>
+    <li>🔊 TTS-Server:
+      {% if job.status == 'speaking' and act.done %}läuft ✓{% elif job.status == 'speaking' %}startet …
+      {% else %}nach der Bestätigung{% endif %}</li>
+    <li>🎤 Stimme: {{ voice }}</li>
+  </ul>
+  {% endif %}
   {% if job.status == "awaiting_tts" %}
-  <p class="error">🔊 Beginn der TTS: Bitte alle anderen lokalen LLM beenden.</p>
-  <form method="post" action="/jobs/{{ job.id }}/speak">
-    <button type="submit">OK — Sprachausgabe starten</button>
-  </form>
+  <div class="note-box">
+    <p class="note-title">🔊 Beginn der Sprachausgabe</p>
+    <p>Bitte alle anderen lokalen LLM beenden — das Sprachmodell und die
+       Sprachausgabe passen nicht gleichzeitig in den Arbeitsspeicher.</p>
+    <form method="post" action="/jobs/{{ job.id }}/speak" data-toast="Sprachausgabe gestartet"
+          hx-post="/jobs/{{ job.id }}/speak" hx-target="#job-status" hx-swap="outerHTML">
+      <button class="primary" type="submit" data-busy>OK — Sprachausgabe starten</button>
+    </form>
+  </div>
   {% endif %}
   {% if job.status == "waiting_for_user" %}
-  <form method="post" action="/jobs/{{ job.id }}/continue">
-    <button type="submit">▶ Weiter</button>
+  <form method="post" action="/jobs/{{ job.id }}/continue" data-toast="Weiter geht’s"
+        hx-post="/jobs/{{ job.id }}/continue" hx-target="#job-status" hx-swap="outerHTML">
+    <button type="submit" data-busy>
+      {{ "Weiter" if "Weiter" in (act.detail or job.message) else "Erneut prüfen" }}</button>
   </form>
   {% endif %}
   {% if job.error %}<p class="error">⚠ {{ job.error }}</p>{% endif %}
@@ -69,19 +86,21 @@
   {% if job.status in ("failed", "cancelled") %}
   <div class="actions">
     {% if has_script %}
-    <form method="post" action="/jobs/{{ job.id }}/speak">
+    <form method="post" action="/jobs/{{ job.id }}/speak" data-toast="Sprachausgabe gestartet"
+          hx-post="/jobs/{{ job.id }}/speak" hx-target="#job-status" hx-swap="outerHTML">
       <button>▶ Weiter — Sprachausgabe</button>
     </form>
     {% endif %}
-    <form method="post" action="/jobs/{{ job.id }}/restart">
+    <form method="post" action="/jobs/{{ job.id }}/restart" data-toast="Neu gestartet"
+          hx-post="/jobs/{{ job.id }}/restart" hx-target="#job-status" hx-swap="outerHTML">
       <button>↩ Neu starten</button>
     </form>
   </div>
   {% endif %}
-  {% if job.status in ("queued", "extracting", "planning", "editing", "verifying",
-                       "waiting_for_user", "speaking", "mastering", "awaiting_tts") %}
+  {% if job.status not in ('done', 'failed', 'cancelled') %}
   <div class="actions">
-    <form method="post" action="/jobs/{{ job.id }}/cancel">
+    <form method="post" action="/jobs/{{ job.id }}/cancel" data-toast="Abbruch angefordert"
+          hx-post="/jobs/{{ job.id }}/cancel" hx-target="#job-status" hx-swap="outerHTML">
       <button>⏹ Abbrechen</button>
     </form>
   </div>

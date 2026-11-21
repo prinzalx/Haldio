@@ -5,7 +5,10 @@ One function per question so templates never show a raw status id.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from haldio.jobs.index import Job
 
 # status id -> German label, icon, color class (badge-<status> in style.css)
 STATUS_LABELS: dict[str, dict[str, str]] = {
@@ -51,7 +54,26 @@ _STATUS_STAGE: dict[str, int] = {
     "mastering": 6,
 }
 
-_STATE_ICONS = {"done": "✓", "current": "▶", "failed": "✗", "pending": "•"}
+_STATE_ICONS = {
+    "done": "✓",
+    "current": "▶",
+    "failed": "✗",
+    "pending": "•",
+    "waiting": "⏸",
+}
+# waiting statuses: the stage that waits (rows before it are done)
+_WAITING_STAGE = {
+    "awaiting_review": 4,
+    "awaiting_tts": 5,
+    "waiting_for_user": 5,
+}
+_STATE_WORDS = {
+    "done": "fertig",
+    "current": "läuft",
+    "failed": "fehlgeschlagen",
+    "pending": "offen",
+    "waiting": "wartet",
+}
 _STAGE_NAMES = [name for name, _label in STAGES]
 
 
@@ -63,27 +85,40 @@ def status_label(status: str) -> dict[str, str]:
     return {"label": status, "icon": "•", "cls": ""}
 
 
-def stage_rows(status: str, hint: str = "") -> list[dict[str, Any]]:
-    """One row per stage with state done/current/failed/pending.
+def stepper_state(job: Job) -> list[dict[str, Any]]:
+    """The seven stepper rows, derived from ONE source (the job record).
 
-    `hint` is the last stage the worker reported; it wins over the status map
-    so a failed job shows where it stopped.
+    Every status maps to exactly one row set, so the stepper can never
+    disagree with the status badge: running stages mark the current stage,
+    waiting statuses mark the stage that waits as "waiting" (never "läuft"),
+    a failed or cancelled job stops at the stage the worker last reported.
     """
-    current = _STAGE_NAMES.index(hint) if hint in _STAGE_NAMES else _STATUS_STAGE.get(status, 0)
+    status = str(getattr(job, "status", ""))
+    activity = getattr(job, "activity", None) or {}
+    stage = str(activity.get("stage") or job.options.get("stage", ""))
+    current = _STAGE_NAMES.index(stage) if stage in _STAGE_NAMES else None
     rows: list[dict[str, Any]] = []
     for index, (name, label) in enumerate(STAGES):
-        if status == "done" or index < current:
+        if status == "done":
             state = "done"
-        elif index == current:
-            state = "failed" if status == "failed" else "current"
+        elif status in ("failed", "cancelled"):
+            stop = current if current is not None else 0
+            state = ("done" if index < stop else "failed" if index == stop else "pending")
+        elif status == "queued":
+            state = "waiting" if index == 0 else "pending"
+        elif status in _WAITING_STAGE:
+            stop = _WAITING_STAGE[status]
+            state = "done" if index < stop else "waiting" if index == stop else "pending"
         else:
-            state = "pending"
+            active = current if current is not None else _STATUS_STAGE.get(status, 0)
+            state = "done" if index < active else "current" if index == active else "pending"
         rows.append(
             {
                 "name": name,
                 "label": label,
                 "state": state,
                 "icon": _STATE_ICONS[state],
+                "word": _STATE_WORDS[state],
             }
         )
     return rows
