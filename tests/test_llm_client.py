@@ -61,3 +61,58 @@ def test_list_models() -> None:
 
     with _client(handler) as client:
         assert client.list_models() == ["bubo", "other"]
+
+
+def _sse(chunks: list[str]) -> str:
+    lines = [f'data: {{"choices":[{{"delta":{{"content":"{c}"}}}}]}}\n' for c in chunks]
+    return "".join(lines) + "data: [DONE]\n\n"
+
+
+def test_chat_stream_counts_tokens() -> None:
+    seen: list[tuple[int, int]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["stream"] is True
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=_sse(["Ein ", "zwei ", "drei"]),
+        )
+
+    with _client(handler) as client:
+        result = client.chat("s", "u", on_activity=lambda s, t: seen.append((s, t)))
+    assert result.text == "Ein zwei drei"
+    assert seen and seen[-1][1] >= 1  # the live detail got a token count
+
+
+def test_chat_stream_ignored_content_type_falls_back() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body.get("stream"):
+            # server answers 200 with plain JSON: stream=true was ignored
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok2"}}]})
+
+    with _client(handler) as client:
+        result = client.chat("s", "u", on_activity=lambda s, t2: None)
+    assert result.text == "ok2"  # the plain request ran after the ignored stream
+
+
+def test_chat_stream_falls_back_when_server_ignores_stream() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body.get("stream"):
+            return httpx.Response(500, text="no streaming")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "plain"}}]})
+
+    calls = {"n": 0}
+
+    def count(s: int, t: int) -> None:
+        calls["n"] += 1
+
+    with _client(handler) as client:
+        result = client.chat("s", "u", on_activity=count)
+    assert result.text == "plain"
+    assert calls["n"] == 0  # no live updates when the server does not stream
+

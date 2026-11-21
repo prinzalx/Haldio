@@ -7,7 +7,7 @@ from pathlib import Path
 from haldio.config import Config
 from haldio.jobs import worker as worker_module
 from haldio.jobs.index import JobIndex
-from haldio.jobs.worker import Worker
+from haldio.jobs.worker import Worker, _parse_note  # noqa: I001
 from haldio.pipeline.master import MasterResult
 from haldio.pipeline.run import BookResult, ScriptResult
 from haldio.pipeline.speak import SpeakResult
@@ -174,3 +174,12 @@ def test_eta_rule_five_real_items_and_cache_excluded(tmp_path, monkeypatch) -> N
     # five real deltas of 10 s are reached at event #7 -> ETA for the last 3
     assert "noch etwa" not in seen[5]
     assert seen[6].startswith("Einheit 7 von 10 · noch etwa")
+
+
+def test_live_note_keeps_the_spec_sentence() -> None:
+    """The worker strips a throwaway head word; the spec sentence must survive."""
+    done, total, marker, extra = _parse_note(
+        "llm das Sprachmodell schreibt seit 38 s (etwa 410 Token)"
+    )
+    assert (done, total, marker) == (0, 0, "")
+    assert extra == "das Sprachmodell schreibt seit 38 s (etwa 410 Token)"

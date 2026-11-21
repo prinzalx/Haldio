@@ -100,6 +100,7 @@ def edit_chunk_with_retry(
     system_prompt: str,
     target_language: str,
     max_retries: int,
+    on_activity: Callable[[int, int], None] | None = None,
 ) -> tuple[ChunkEdit, list[Issue]]:
     """Call the editor, verify, and retry with the issues as feedback."""
     feedback = ""
@@ -107,7 +108,9 @@ def edit_chunk_with_retry(
     best: ChunkEdit | None = None
     for attempt in range(max_retries + 1):
         user = build_user_message(chunk, target_language) + feedback
-        answer = client.chat(system_prompt, user, json_schema=EDITOR_JSON_SCHEMA)
+        answer = client.chat(
+            system_prompt, user, json_schema=EDITOR_JSON_SCHEMA, on_activity=on_activity
+        )
         try:
             result = parse_editor_result(answer.text)
         except Exception as error:  # noqa: BLE001 - any bad answer triggers a retry
@@ -170,10 +173,24 @@ def run_script(
     _run_hook("before_edit", config.hooks.before_edit)
     try:
         for index, chunk in enumerate(chunks, start=1):
-            report("editing", 10 + int(50 * (index - 1) / max(1, len(chunks))))
+            base = 10 + int(50 * (index - 1) / max(1, len(chunks)))
+            report("editing", base)
+
+            def live(secs: int, tokens: int, _base: int = base) -> None:
+                report(
+                    "editing",
+                    _base,
+                    f"llm das Sprachmodell schreibt seit {secs} s (etwa {tokens} Token)",
+                )
+
             chunk["previous_script_tail"] = previous_tail
             edit, issues = edit_chunk_with_retry(
-                chunk, client, system_prompt, target_language, config.editor.max_retries
+                chunk,
+                client,
+                system_prompt,
+                target_language,
+                config.editor.max_retries,
+                on_activity=live,
             )
             edits.append(edit)
             qa.append(

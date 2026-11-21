@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -129,8 +131,29 @@ class LlmClient:
         user: str,
         json_schema: dict[str, Any] | None = None,
         temperature: float | None = None,
+        on_activity: Callable[[int, int], None] | None = None,
     ) -> ChatResult:
-        """Send one system+user pair. `json_schema` requests a structured answer."""
+        """Send one system+user pair. `json_schema` requests a structured answer.
+
+        With `on_activity` the request uses stream=true and the callback gets
+        (elapsed seconds, about tokens) about once per second while the answer
+        arrives. A server that ignores or rejects streaming falls back to the
+        plain request; the UI then keeps the elapsed time only.
+        """
+        body = self._chat_body(system, user, json_schema, temperature)
+        if on_activity is not None:
+            streamed = self._stream_chat(body, on_activity)
+            if streamed is not None:
+                return streamed
+        return self._post_chat(body)
+
+    def _chat_body(
+        self,
+        system: str,
+        user: str,
+        json_schema: dict[str, Any] | None,
+        temperature: float | None,
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": self.config.model,
             "temperature": self.config.temperature if temperature is None else temperature,
@@ -145,12 +168,52 @@ class LlmClient:
                 "type": "json_schema",
                 "json_schema": {"name": "editor_output", "schema": json_schema, "strict": True},
             }
+        return body
+
+    def _stream_chat(
+        self, body: dict[str, Any], on_activity: Callable[[int, int], None]
+    ) -> ChatResult | None:
+        """One streaming request; None when the server does not stream."""
+        parts: list[str] = []
+        tokens = 0
+        started = time.monotonic()
+        last_report = -1.0
+        try:
+            stream_body = {**body, "stream": True}
+            with self._client.stream("POST", "/chat/completions", json=stream_body) as response:
+                if response.status_code >= 400:
+                    return None  # let the plain request report the real error
+                if not response.headers.get("content-type", "").startswith("text/event-stream"):
+                    return None  # the server ignored stream=true
+                for line in response.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        break
+                    try:
+                        delta = json.loads(payload)["choices"][0].get("delta") or {}
+                    except (KeyError, IndexError, ValueError):
+                        continue
+                    piece = delta.get("content") or ""
+                    if piece:
+                        parts.append(piece)
+                        tokens += 1
+                    elapsed = time.monotonic() - started
+                    if elapsed - last_report >= 1.0:
+                        last_report = elapsed
+                        on_activity(int(elapsed), tokens)
+        except httpx.HTTPError as error:
+            raise LlmError(f"LLM call failed: {error}") from error
+        return ChatResult(text="".join(parts))
+
+    def _post_chat(self, body: dict[str, Any]) -> ChatResult:
         try:
             response = self._client.post("/chat/completions", json=body)
             response.raise_for_status()
         except httpx.HTTPStatusError as error:
             detail = error.response.text[:200]
-            if json_schema is not None and _schema_not_supported(detail):
+            if "response_format" in body and _schema_not_supported(detail):
                 body.pop("response_format")
                 response = self._client.post("/chat/completions", json=body)
                 response.raise_for_status()
